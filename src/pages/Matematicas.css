@@ -1,0 +1,70 @@
+.mates-board {
+  text-align: center;
+}
+
+.mates-visual {
+  min-height: 3.5rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.6rem;
+  flex-wrap: wrap;
+  margin-bottom: 0.5rem;
+}
+
+.dot-group {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.25rem;
+  max-width: 7rem;
+  justify-content: center;
+}
+
+.dot {
+  width: 0.85rem;
+  height: 0.85rem;
+  border-radius: 50%;
+  background: var(--sky-mid);
+}
+
+.dot.alt {
+  background: var(--sun-hot);
+}
+
+.op-sign,
+.op-big {
+  font-family: var(--font-display);
+  font-size: 1.8rem;
+  color: var(--sky-deep);
+}
+
+.mates-eq {
+  font-family: var(--font-display);
+  font-size: clamp(2rem, 8vw, 3rem);
+  margin: 0.4rem 0;
+  font-weight: 800;
+}
+
+.mates-answer {
+  font-family: var(--font-display);
+  font-size: 2.2rem;
+  min-height: 2.6rem;
+  margin: 0;
+  color: var(--sky-deep);
+  background: rgba(11, 110, 138, 0.08);
+  border-radius: 1rem;
+  padding: 0.3rem 1rem;
+  display: inline-block;
+  min-width: 5rem;
+}
+
+.pad .ok-key {
+  background: var(--leaf);
+  color: #053b36;
+}
+
+.mates-score {
+  font-family: var(--font-display);
+  color: var(--sun-hot);
+  margin: 0.4rem 0 0;
+}
