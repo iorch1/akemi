@@ -9,15 +9,17 @@ type Props = {
 
 export function PackCollage({ progress, compact }: Props) {
   return (
-    <ul className={`pack-grid ${compact ? "pack-grid-compact" : ""}`} aria-label="Packs de colorear">
+    <ul className={`pack-grid ${compact ? "pack-grid-compact" : ""}`} aria-label="Libros para colorear">
       {COLORING_PACKS.map((pack) => {
         const unlocked = isPackFullyUnlocked(progress, pack.id);
         const partial = pack.images.filter((i) => progress.unlockedImages.includes(i.id)).length;
+        const previewImages = pack.images.filter((i) => pack.previewIds.includes(i.id));
+        const pageCount = pack.images.length;
         return (
           <li key={pack.id} className={`pack-card ${unlocked ? "unlocked" : "locked"}`}>
             <PackCardHead className="pack-card-head" unlocked={unlocked} emoji={pack.emoji} name={pack.name} />
             <div className="pack-thumbs" aria-hidden={unlocked ? undefined : true}>
-              {pack.images.map((img) => {
+              {previewImages.map((img) => {
                 const open = progress.unlockedImages.includes(img.id);
                 return (
                   <div
@@ -37,13 +39,15 @@ export function PackCollage({ progress, compact }: Props) {
             </div>
             <p className="pack-meta">
               {unlocked ? (
-                "¡Pack completo!"
+                <>¡Libro completo! · {pageCount} páginas</>
               ) : (
                 <>
                   <span className="pack-lock" aria-hidden>
                     🔒
                   </span>{" "}
-                  {partial > 0 ? `${partial}/5 dibujos` : pack.unlockHint}
+                  {partial > 0
+                    ? `${partial}/${pageCount} páginas`
+                    : `${pageCount} páginas · ${pack.unlockHint}`}
                 </>
               )}
             </p>

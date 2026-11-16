@@ -2,7 +2,10 @@ import { Capacitor } from "@capacitor/core";
 import { LiveUpdate } from "@capawesome/capacitor-live-update";
 import { useEffect } from "react";
 import { Navigate, Route, Routes } from "react-router-dom";
+import { ProfileProvider } from "./context/ProfileContext";
 import { Layout } from "./components/Layout";
+import { RequireProfile } from "./components/RequireProfile";
+import { ProfileGate } from "./pages/ProfileGate";
 import { Home } from "./pages/Home";
 import { Leer } from "./pages/Leer";
 import { Matematicas } from "./pages/Matematicas";
@@ -21,17 +24,22 @@ export default function App() {
   }, []);
 
   return (
+    <ProfileProvider>
     <Routes>
-      <Route element={<Layout />}>
-        <Route index element={<Home />} />
-        <Route path="leer" element={<Leer />} />
-        <Route path="mates" element={<Matematicas />} />
-        <Route path="juegos" element={<Juegos />} />
-        <Route path="juegos/tetris" element={<Tetris />} />
-        <Route path="juegos/snake" element={<Snake />} />
-        <Route path="dibujo" element={<Dibujo />} />
-        <Route path="*" element={<Navigate to="/" replace />} />
+      <Route path="perfiles" element={<ProfileGate />} />
+      <Route element={<RequireProfile />}>
+        <Route element={<Layout />}>
+          <Route index element={<Home />} />
+          <Route path="leer" element={<Leer />} />
+          <Route path="mates" element={<Matematicas />} />
+          <Route path="juegos" element={<Juegos />} />
+          <Route path="juegos/tetris" element={<Tetris />} />
+          <Route path="juegos/snake" element={<Snake />} />
+          <Route path="dibujo" element={<Dibujo />} />
+          <Route path="*" element={<Navigate to="/" replace />} />
+        </Route>
       </Route>
     </Routes>
+    </ProfileProvider>
   );
 }

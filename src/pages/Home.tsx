@@ -1,6 +1,9 @@
 import { Link } from "react-router-dom";
 import { PackCollage } from "../components/PackCollage";
+import { useProfileContext } from "../context/ProfileContext";
 import { useProgress } from "../hooks/useProgress";
+import { difficultyForAge, difficultyLabel } from "../lib/difficulty";
+import { avatarEmoji } from "../lib/profiles";
 import { countUnlockedImages, nextUnlockSummary, totalImages } from "../lib/progress";
 import "./Home.css";
 
@@ -36,20 +39,33 @@ const sections = [
 ];
 
 export function Home() {
+  const { profile } = useProfileContext();
   const [progress] = useProgress();
   const next = nextUnlockSummary(progress);
   const unlocked = countUnlockedImages(progress);
   const total = totalImages();
+  const diff = profile ? difficultyLabel(difficultyForAge(profile.edad)) : "";
 
   return (
     <main className="screen home">
+      {profile && (
+        <div className="home-profile-bar panel-soft">
+          <span className="home-profile-avatar">{avatarEmoji(profile.avatar)}</span>
+          <span>
+            Hola, <strong>{profile.nombre}</strong> · {profile.edad} años · {diff}
+          </span>
+          <Link to="/perfiles" className="home-profile-switch">
+            Cambiar jugador
+          </Link>
+        </div>
+      )}
       <header className="home-hero">
         <div className="home-sun" aria-hidden />
         <div className="home-mascot" aria-hidden>
           <span className="mascot-face">🌞</span>
         </div>
         <h1 className="brand-mark home-brand">Akemi</h1>
-        <p className="home-tagline">Aprende, calcula y colorea tus guerreras kawaii</p>
+        <p className="home-tagline">Aprende, calcula y colorea los libros Robcrea</p>
         <p className="home-cta-hint">Elige una aventura</p>
       </header>
 
@@ -58,7 +74,7 @@ export function Home() {
           Tu colección
         </h2>
         <p className="home-progress-count">
-          Dibujos desbloqueados: <strong>{unlocked}</strong> / {total}
+          Páginas desbloqueadas: <strong>{unlocked}</strong> / {total}
         </p>
         <div className="home-next-unlock">
           <p className="home-next-label">{next.title}</p>

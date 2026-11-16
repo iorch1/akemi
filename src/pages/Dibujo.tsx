@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { BackButton } from "../components/BackButton";
 import { useProgress } from "../hooks/useProgress";
-import { COLORING_PACKS } from "../lib/coloring-packs";
+import { COLORING_PACKS, packForImage } from "../lib/coloring-packs";
 import { drawSvgOnCanvas } from "../lib/svg-canvas";
 import "./Dibujo.css";
 
@@ -73,16 +73,18 @@ function floodFill(ctx: CanvasRenderingContext2D, x: number, y: number, fillHex:
 
 export function Dibujo() {
   const [progress] = useProgress();
-  const unlockedTemplates = useMemo(
+  const unlockedByPack = useMemo(
     () =>
-      COLORING_PACKS.flatMap((p) => p.images).filter((img) =>
-        progress.unlockedImages.includes(img.id),
-      ),
+      COLORING_PACKS.map((pack) => ({
+        pack,
+        pages: pack.images.filter((img) => progress.unlockedImages.includes(img.id)),
+      })).filter((row) => row.pages.length > 0),
     [progress.unlockedImages],
   );
 
   const [mode, setMode] = useState<Mode>("colorear");
-  const [templateId, setTemplateId] = useState(unlockedTemplates[0]?.id ?? "");
+  const [packId, setPackId] = useState(unlockedByPack[0]?.pack.id ?? "");
+  const [templateId, setTemplateId] = useState(unlockedByPack[0]?.pages[0]?.id ?? "");
   const [color, setColor] = useState(COLORS[1]);
   const [brush, setBrush] = useState(8);
   const [erasing, setErasing] = useState(false);
@@ -91,13 +93,24 @@ export function Dibujo() {
   const drawing = useRef(false);
   const last = useRef<{ x: number; y: number } | null>(null);
 
-  const currentTemplate = unlockedTemplates.find((t) => t.id === templateId) ?? unlockedTemplates[0];
+  const activePackRow = unlockedByPack.find((r) => r.pack.id === packId) ?? unlockedByPack[0];
+  const packPages = activePackRow?.pages ?? [];
+  const currentTemplate =
+    packPages.find((t) => t.id === templateId) ?? packPages[0];
 
   useEffect(() => {
-    if (unlockedTemplates.length && !unlockedTemplates.some((t) => t.id === templateId)) {
-      setTemplateId(unlockedTemplates[0].id);
+    if (!unlockedByPack.length) return;
+    if (!unlockedByPack.some((r) => r.pack.id === packId)) {
+      setPackId(unlockedByPack[0].pack.id);
+      setTemplateId(unlockedByPack[0].pages[0]?.id ?? "");
     }
-  }, [unlockedTemplates, templateId]);
+  }, [unlockedByPack, packId]);
+
+  useEffect(() => {
+    if (packPages.length && !packPages.some((t) => t.id === templateId)) {
+      setTemplateId(packPages[0].id);
+    }
+  }, [packPages, templateId]);
 
   const paintTemplate = useCallback(async () => {
     const canvas = colorCanvasRef.current;
@@ -184,8 +197,8 @@ export function Dibujo() {
     ctx.fillRect(0, 0, canvas.width, canvas.height);
   }
 
-  const lockedCount =
-    COLORING_PACKS.flatMap((p) => p.images).length - unlockedTemplates.length;
+  const lockedCount = COLORING_PACKS.flatMap((p) => p.images).length - progress.unlockedImages.length;
+  const packLabel = currentTemplate ? packForImage(currentTemplate.id)?.name : "";
 
   return (
     <main className="screen dibujo">
@@ -195,7 +208,7 @@ export function Dibujo() {
       <div className="panel">
         <h1 className="section-title">Dibujo</h1>
         <p className="section-sub">
-          {unlockedTemplates.length} plantillas listas
+          {progress.unlockedImages.length} páginas listas
           {lockedCount > 0 ? ` · ${lockedCount} más en lectura y mates` : ""}
         </p>
 
@@ -234,14 +247,30 @@ export function Dibujo() {
 
         {mode === "colorear" ? (
           <>
-            {unlockedTemplates.length === 0 ? (
+            {unlockedByPack.length === 0 ? (
               <p className="dibujo-locked-msg">
-                Aún no hay dibujos. Gana retos en Aprender a leer o Matemáticas.
+                Aún no hay páginas. Gana retos en Aprender a leer o Matemáticas.
               </p>
             ) : (
               <>
                 <div className="dibujo-template-scroll level-pills">
-                  {unlockedTemplates.map((t) => (
+                  {unlockedByPack.map(({ pack }) => (
+                    <button
+                      key={pack.id}
+                      type="button"
+                      className={`level-pill template-pill ${packId === pack.id ? "active" : ""}`}
+                      onClick={() => {
+                        setPackId(pack.id);
+                        const first = unlockedByPack.find((r) => r.pack.id === pack.id)?.pages[0];
+                        if (first) setTemplateId(first.id);
+                      }}
+                    >
+                      {pack.emoji} {pack.name}
+                    </button>
+                  ))}
+                </div>
+                <div className="dibujo-template-scroll level-pills dibujo-pages">
+                  {packPages.map((t) => (
                     <button
                       key={t.id}
                       type="button"
@@ -252,12 +281,13 @@ export function Dibujo() {
                     </button>
                   ))}
                 </div>
+                {packLabel && <p className="dibujo-pack-label">{packLabel}</p>}
                 <p className="dibujo-hint">Toca una zona para rellenarla de color</p>
                 <div className="canvas-frame">
                   <canvas
                     ref={colorCanvasRef}
-                    width={320}
-                    height={320}
+                    width={400}
+                    height={520}
                     className="draw-canvas"
                     onPointerDown={onColorPointer}
                   />

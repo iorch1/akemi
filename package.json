@@ -13,7 +13,8 @@
     "android:open": "npx cap open android",
     "android:build": "npm run cap:sync && cd android && ./gradlew assembleDebug",
     "android:release": "npm run cap:sync && cd android && ./gradlew assembleRelease",
-    "ota:bundle": "node scripts/publish-ota.mjs"
+    "ota:bundle": "node scripts/publish-ota.mjs",
+    "libros:ingest": "python3 scripts/ingest-robcrea-libros.py"
   },
   "dependencies": {
     "@capacitor/android": "^8.6.2",

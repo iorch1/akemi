@@ -1,3 +1,34 @@
+.boot-msg {
+  text-align: center;
+  padding: 2rem;
+  font-family: var(--font-body);
+}
+
+.home-profile-bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem 0.75rem;
+  padding: 0.65rem 0.85rem;
+  font-size: 0.92rem;
+}
+
+.home-profile-avatar {
+  font-size: 1.75rem;
+}
+
+.home-profile-switch {
+  margin-left: auto;
+  font-weight: 800;
+  font-size: 0.85rem;
+}
+
+.mates-diff-note {
+  margin: 0 0 0.75rem;
+  font-size: 0.88rem;
+  opacity: 0.85;
+}
+
 :root {
   --sky-deep: #0b6e8a;
   --sky-mid: #1a9bb5;
