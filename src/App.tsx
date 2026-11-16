@@ -13,6 +13,7 @@ import { Juegos } from "./pages/Juegos";
 import { Tetris } from "./pages/Tetris";
 import { Snake } from "./pages/Snake";
 import { Dibujo } from "./pages/Dibujo";
+import { Crear } from "./pages/Crear";
 import { preloadVoices } from "./utils/speech";
 
 export default function App() {
@@ -36,6 +37,7 @@ export default function App() {
           <Route path="juegos/tetris" element={<Tetris />} />
           <Route path="juegos/snake" element={<Snake />} />
           <Route path="dibujo" element={<Dibujo />} />
+          <Route path="crear" element={<Crear />} />
           <Route path="*" element={<Navigate to="/" replace />} />
         </Route>
       </Route>

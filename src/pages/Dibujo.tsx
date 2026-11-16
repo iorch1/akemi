@@ -10,6 +10,8 @@ import "./Dibujo.css";
 type Mode = "colorear" | "libre";
 
 const MAX_UNDO = 24;
+const COLOR_W = 400;
+const COLOR_H = 520;
 
 function hexToRgb(hex: string) {
   const h = hex.replace("#", "");
@@ -85,7 +87,12 @@ function useCanvasUndo(canvasRef: React.RefObject<HTMLCanvasElement | null>) {
     stack.current = [];
   }, []);
 
-  return { snapshot, undo, resetStack, canUndo: () => stack.current.length > 0 };
+  const canUndo = useCallback(() => stack.current.length > 0, []);
+
+  return useMemo(
+    () => ({ snapshot, undo, resetStack, canUndo }),
+    [snapshot, undo, resetStack, canUndo],
+  );
 }
 
 export function Dibujo() {
@@ -106,9 +113,17 @@ export function Dibujo() {
   const [brushPreset, setBrushPreset] = useState<BrushPreset>(BRUSH_PRESETS[4]);
   const [erasing, setErasing] = useState(false);
   const colorCanvasRef = useRef<HTMLCanvasElement>(null);
+  const colorBaseOffscreenRef = useRef<HTMLCanvasElement | null>(null);
   const freeCanvasRef = useRef<HTMLCanvasElement>(null);
   const drawing = useRef(false);
   const last = useRef<{ x: number; y: number } | null>(null);
+
+  /** Estado pintado por página (no se pierde al cambiar color o herramienta). */
+  const pagePaintCache = useRef<Map<string, ImageData>>(new Map());
+  /** Línea base del modelo por página (offscreen). */
+  const pageBaseCache = useRef<Map<string, ImageData>>(new Map());
+  const activeColorPageRef = useRef<string>("");
+  const freeCanvasInitialized = useRef(false);
 
   const colorUndo = useCanvasUndo(colorCanvasRef);
   const freeUndo = useCanvasUndo(freeCanvasRef);
@@ -132,33 +147,91 @@ export function Dibujo() {
     }
   }, [packPages, templateId]);
 
-  const paintTemplate = useCallback(async () => {
+  const saveActiveColorPage = useCallback(() => {
     const canvas = colorCanvasRef.current;
-    if (!canvas || !currentTemplate) return;
+    const pageId = activeColorPageRef.current;
+    if (!canvas || !pageId) return;
     const ctx = canvas.getContext("2d");
     if (!ctx) return;
-    colorUndo.resetStack();
-    try {
-      await drawSvgOnCanvas(ctx, currentTemplate.src, canvas.width, canvas.height);
-    } catch {
-      ctx.fillStyle = "#f7fbff";
-      ctx.fillRect(0, 0, canvas.width, canvas.height);
+    pagePaintCache.current.set(
+      pageId,
+      ctx.getImageData(0, 0, canvas.width, canvas.height),
+    );
+  }, []);
+
+  const getOffscreenBase = useCallback(() => {
+    if (!colorBaseOffscreenRef.current) {
+      const off = document.createElement("canvas");
+      off.width = COLOR_W;
+      off.height = COLOR_H;
+      colorBaseOffscreenRef.current = off;
     }
-  }, [currentTemplate, colorUndo]);
+    return colorBaseOffscreenRef.current;
+  }, []);
+
+  const ensureBaseTemplate = useCallback(
+    async (pageId: string, src: string): Promise<ImageData | null> => {
+      const cached = pageBaseCache.current.get(pageId);
+      if (cached) return cached;
+      const off = getOffscreenBase();
+      const ctx = off.getContext("2d");
+      if (!ctx) return null;
+      try {
+        await drawSvgOnCanvas(ctx, src, off.width, off.height);
+      } catch {
+        ctx.fillStyle = "#f7fbff";
+        ctx.fillRect(0, 0, off.width, off.height);
+      }
+      const base = ctx.getImageData(0, 0, off.width, off.height);
+      pageBaseCache.current.set(pageId, base);
+      return base;
+    },
+    [getOffscreenBase],
+  );
+
+  const showColorPage = useCallback(
+    async (pageId: string, src: string) => {
+      const canvas = colorCanvasRef.current;
+      if (!canvas || mode !== "colorear") return;
+      const ctx = canvas.getContext("2d");
+      if (!ctx) return;
+
+      await ensureBaseTemplate(pageId, src);
+      colorUndo.resetStack();
+
+      const painted = pagePaintCache.current.get(pageId);
+      if (painted) {
+        ctx.putImageData(painted, 0, 0);
+      } else {
+        const base = pageBaseCache.current.get(pageId);
+        if (base) ctx.putImageData(base, 0, 0);
+      }
+      activeColorPageRef.current = pageId;
+    },
+    [colorUndo, ensureBaseTemplate, mode],
+  );
 
   useEffect(() => {
-    if (mode === "colorear" && currentTemplate) void paintTemplate();
-  }, [mode, paintTemplate, currentTemplate]);
+    if (mode !== "colorear" || !currentTemplate) return;
+  void showColorPage(currentTemplate.id, currentTemplate.src);
+  }, [mode, currentTemplate?.id, currentTemplate?.src, showColorPage]);
 
   useEffect(() => {
+    return () => {
+      saveActiveColorPage();
+    };
+  }, [currentTemplate?.id, saveActiveColorPage]);
+
+  useEffect(() => {
+    if (mode !== "libre") return;
     const canvas = freeCanvasRef.current;
-    if (!canvas || mode !== "libre") return;
+    if (!canvas || freeCanvasInitialized.current) return;
     const ctx = canvas.getContext("2d");
     if (!ctx) return;
-    freeUndo.resetStack();
     ctx.fillStyle = "#ffffff";
     ctx.fillRect(0, 0, canvas.width, canvas.height);
-  }, [mode, freeUndo]);
+    freeCanvasInitialized.current = true;
+  }, [mode]);
 
   function pointerPos(canvas: HTMLCanvasElement, e: React.PointerEvent) {
     const rect = canvas.getBoundingClientRect();
@@ -179,6 +252,12 @@ export function Dibujo() {
     const p = pointerPos(canvas, e);
     const fill = erasing ? "#ffffff" : color;
     floodFill(ctx, p.x, p.y, fill);
+    if (currentTemplate) {
+      pagePaintCache.current.set(
+        currentTemplate.id,
+        ctx.getImageData(0, 0, canvas.width, canvas.height),
+      );
+    }
   }
 
   function applyBrushStyle(ctx: CanvasRenderingContext2D, preset: BrushPreset, erase: boolean) {
@@ -224,6 +303,18 @@ export function Dibujo() {
     last.current = null;
   }
 
+  function clearColorPage() {
+    if (!currentTemplate) return;
+    const canvas = colorCanvasRef.current;
+    if (!canvas) return;
+    const ctx = canvas.getContext("2d");
+    if (!ctx) return;
+    colorUndo.snapshot();
+    pagePaintCache.current.delete(currentTemplate.id);
+    const base = pageBaseCache.current.get(currentTemplate.id);
+    if (base) ctx.putImageData(base, 0, 0);
+  }
+
   function clearFree() {
     const canvas = freeCanvasRef.current;
     if (!canvas) return;
@@ -264,7 +355,7 @@ export function Dibujo() {
         type="button"
         className="btn btn-leaf"
         onClick={() => {
-          if (mode === "colorear") void paintTemplate();
+          if (mode === "colorear") clearColorPage();
           else clearFree();
         }}
       >
@@ -325,6 +416,7 @@ export function Dibujo() {
                       type="button"
                       className={`level-pill template-pill ${packId === pack.id ? "active" : ""}`}
                       onClick={() => {
+                        saveActiveColorPage();
                         setPackId(pack.id);
                         const first = unlockedByPack.find((r) => r.pack.id === pack.id)?.pages[0];
                         if (first) setTemplateId(first.id);
@@ -340,7 +432,10 @@ export function Dibujo() {
                       key={t.id}
                       type="button"
                       className={`level-pill template-pill ${templateId === t.id ? "active" : ""}`}
-                      onClick={() => setTemplateId(t.id)}
+                      onClick={() => {
+                        saveActiveColorPage();
+                        setTemplateId(t.id);
+                      }}
                     >
                       {t.label}
                     </button>
@@ -353,8 +448,8 @@ export function Dibujo() {
                 <div className="canvas-frame">
                   <canvas
                     ref={colorCanvasRef}
-                    width={400}
-                    height={520}
+                    width={COLOR_W}
+                    height={COLOR_H}
                     className="draw-canvas"
                     onPointerDown={onColorPointer}
                   />

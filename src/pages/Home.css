@@ -148,6 +148,9 @@
 .tile-dibujo {
   background: linear-gradient(135deg, #fff 0%, #ffd4d4 100%);
 }
+.tile-crear {
+  background: linear-gradient(135deg, #fff 0%, #e8dcff 100%);
+}
 
 .panel-soft {
   background: rgba(255, 255, 255, 0.55);
