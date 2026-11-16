@@ -42,10 +42,13 @@ export async function runProgram(
       );
     });
 
-  const tick = () => cb.onTick({ ...state });
+  const publish: (s: SpriteState) => void = (s) => {
+    state = s;
+    cb.onTick({ ...s });
+  };
 
   try {
-    await walk(blocks, state, stage, cb, delay, tick, signal);
+    state = await walk(blocks, state, stage, cb, delay, publish, signal);
     cb.onDone();
   } catch (e) {
     if ((e as Error).name === "AbortError") {
@@ -62,7 +65,7 @@ export async function runProgram(
     stg: StageSize,
     callbacks: RuntimeCallbacks,
     wait: (ms: number) => Promise<void>,
-    refresh: () => void,
+    publish: (s: SpriteState) => void,
     abort?: AbortSignal,
   ): Promise<SpriteState> {
     let s = st;
@@ -79,15 +82,15 @@ export async function runProgram(
           y: clamp(s.y + Math.sin(rad) * steps, 24, stg.height - 24),
           sayBubble: null,
         };
-        refresh();
+        publish(s);
         await wait(280);
       } else if (block.kind === "turn_left") {
         s = { ...s, heading: normDeg(s.heading - 90), sayBubble: null };
-        refresh();
+        publish(s);
         await wait(200);
       } else if (block.kind === "turn_right") {
         s = { ...s, heading: normDeg(s.heading + 90), sayBubble: null };
-        refresh();
+        publish(s);
         await wait(200);
       } else if (block.kind === "wait") {
         const sec = Math.max(0.1, Number(block.value ?? 1));
@@ -95,17 +98,17 @@ export async function runProgram(
       } else if (block.kind === "say") {
         const text = String(block.value ?? "¡Hola!");
         s = { ...s, sayBubble: text };
-        refresh();
+        publish(s);
         callbacks.onSay(text);
         speak(text, { mode: "phrase" });
         await wait(1600);
         s = { ...s, sayBubble: null };
-        refresh();
+        publish(s);
       } else if (block.kind === "repeat") {
         const times = Math.min(20, Math.max(1, Math.floor(Number(block.value ?? 2))));
         const body = block.children ?? [];
         for (let i = 0; i < times; i++) {
-          s = await walk(body, s, stg, callbacks, wait, refresh, abort);
+          s = await walk(body, s, stg, callbacks, wait, publish, abort);
         }
       }
     }

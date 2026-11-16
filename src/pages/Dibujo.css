@@ -28,7 +28,7 @@
   }
 
   .dibujo-palette-side {
-    order: 3;
+    order: 1;
   }
 
   .dibujo-canvas-area {
@@ -36,7 +36,7 @@
   }
 
   .dibujo-sidebar {
-    order: 1;
+    order: 3;
   }
 }
 
@@ -333,4 +333,85 @@
   height: 1000px;
   touch-action: none;
   cursor: crosshair;
+}
+
+.dibujo-hint-side {
+  text-align: left;
+  font-size: 0.82rem;
+  margin: 0;
+}
+
+.dibujo-pack-label {
+  margin: 0.35rem 0 0;
+  font-size: 0.78rem;
+  font-weight: 700;
+  opacity: 0.8;
+}
+
+.tool-family-row {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  margin-bottom: 0.5rem;
+}
+
+.tool-family {
+  position: relative;
+}
+
+.tool-family-btn {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 0.4rem 0.45rem;
+  border-radius: 0.65rem;
+  border: 2px solid rgba(11, 58, 74, 0.12);
+  background: #fff;
+  font-size: 0.78rem;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.tool-family-btn.active {
+  border-color: var(--coral);
+  box-shadow: 0 0 0 1px rgba(255, 107, 107, 0.25);
+}
+
+.tool-family-caret {
+  margin-left: auto;
+  opacity: 0.6;
+  font-size: 0.7rem;
+}
+
+.tool-family-menu {
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: calc(100% + 0.2rem);
+  z-index: 5;
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+  padding: 0.35rem;
+  border-radius: 0.65rem;
+  background: #fff;
+  box-shadow: var(--shadow);
+  border: 1px solid rgba(11, 58, 74, 0.1);
+}
+
+.tool-family-menu button {
+  text-align: left;
+  padding: 0.35rem 0.45rem;
+  border: none;
+  border-radius: 0.45rem;
+  background: transparent;
+  font-size: 0.76rem;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.tool-family-menu button.active,
+.tool-family-menu button:hover {
+  background: rgba(46, 196, 182, 0.15);
 }
