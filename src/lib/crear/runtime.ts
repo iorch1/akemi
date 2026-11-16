@@ -1,10 +1,12 @@
 import type { ProgramBlock } from "./blocks";
 import type { StageGoal } from "./curriculum";
 import { collectAtPosition, goalsComplete, starReached } from "./goals";
+import { isBlockedAhead, wallHitAt, type StageWall } from "./obstacles";
 import { speak } from "../../utils/speech";
 
 export type GoalRunContext = {
   goals: StageGoal[];
+  walls: StageWall[];
   collected: Set<string>;
   onCollect: (id: string) => void;
   onWin?: () => void;
@@ -113,10 +115,17 @@ export async function runProgram(
       if (block.kind === "move") {
         const steps = Number(block.value ?? 40) * STEP_PX_PER_UNIT;
         const rad = (s.heading * Math.PI) / 180;
+        let nx = clamp(s.x + Math.cos(rad) * steps, 24, stg.width - 24);
+        let ny = clamp(s.y + Math.sin(rad) * steps, 24, stg.height - 24);
+        const walls = goalCtx?.walls ?? [];
+        if (wallHitAt(nx, ny, walls)) {
+          nx = s.x;
+          ny = s.y;
+        }
         s = {
           ...s,
-          x: clamp(s.x + Math.cos(rad) * steps, 24, stg.width - 24),
-          y: clamp(s.y + Math.sin(rad) * steps, 24, stg.height - 24),
+          x: nx,
+          y: ny,
           sayBubble: null,
         };
         publish(s);
@@ -150,6 +159,13 @@ export async function runProgram(
           s = await walk(body, s, stg, callbacks, wait, publish, abort, goalCtx, wonRef);
           if (wonRef?.done) return s;
         }
+      } else if (block.kind === "if_blocked") {
+        const walls = goalCtx?.walls ?? [];
+        if (isBlockedAhead(s, walls)) {
+          const body = block.children ?? [];
+          s = await walk(body, s, stg, callbacks, wait, publish, abort, goalCtx, wonRef);
+          if (wonRef?.done) return s;
+        }
       }
     }
     return s;
@@ -171,4 +187,4 @@ export const DEFAULT_SPRITE: SpriteState = {
   sayBubble: null,
 };
 
-export const STAGE_SIZE: StageSize = { width: 360, height: 320 };
+export const STAGE_SIZE: StageSize = { width: 420, height: 360 };

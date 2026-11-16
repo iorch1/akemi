@@ -3,10 +3,10 @@
 App educativa infantil en español (leer, matemáticas, juegos, dibujo y Crear).
 
 - **Dibujo:** paleta y herramientas a la izquierda, plantillas a la derecha; el mezclador HSV va **encima del lienzo** (la pintura por página sigue en memoria de sesión).
-- **Crear:** currículo de **15 niveles** (metas estrella/gemas, progreso por perfil); bloques Hora del Código y **Reproducir** para animar a Aki.
+- **Crear:** **24 niveles**, escenario central grande, muros, muñeco Aki; bloques a la derecha y proyectos guardados debajo.
+- **Inicio:** botón **Descargar app Android (APK)** → `public/akemi-android.apk` (ver [docs/ANDROID.md](./docs/ANDROID.md)).
 
 - **Web:** `npm run dev` → http://127.0.0.1:5173/
-- **Android APK:** ver [docs/ANDROID.md](./docs/ANDROID.md)
 - **Publicación web Cursor:** slug `akemi` — confirmar Publish en el agente del proyecto para obtener la URL pública de escritorio.
 
 ---

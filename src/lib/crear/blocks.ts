@@ -7,7 +7,8 @@ export type BlockKind =
   | "turn_right"
   | "wait"
   | "say"
-  | "repeat";
+  | "repeat"
+  | "if_blocked";
 
 export type ProgramBlock = {
   id: string;
@@ -83,6 +84,12 @@ export const BLOCK_DEFS: BlockDef[] = [
     valueLabel: "veces",
     defaultValue: 3,
   },
+  {
+    kind: "if_blocked",
+    label: "Si hay pared",
+    emoji: "🧱",
+    color: "#8d6e63",
+  },
 ];
 
 export function blockDef(kind: BlockKind): BlockDef {
@@ -97,7 +104,7 @@ export function createBlock(kind: BlockKind): ProgramBlock {
   const def = blockDef(kind);
   const block: ProgramBlock = { id: newBlockId(), kind };
   if (def.hasValue) block.value = def.defaultValue;
-  if (kind === "repeat") block.children = [];
+  if (kind === "repeat" || kind === "if_blocked") block.children = [];
   return block;
 }
 

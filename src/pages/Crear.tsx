@@ -34,6 +34,7 @@ import {
 import {
   drawAkemiSprite,
   drawStageGoals,
+  drawStageWalls,
   roundRect,
 } from "../lib/crear/stage-draw";
 import {
@@ -139,6 +140,7 @@ export function Crear() {
       ctx.arc(width - 42, 42, 22, 0, Math.PI * 2);
       ctx.fill();
 
+      drawStageWalls(ctx, activeLevel.walls);
       drawStageGoals(ctx, activeLevel.goals, collected);
       drawAkemiSprite(ctx, st);
 
@@ -159,7 +161,7 @@ export function Crear() {
         ctx.fillText(st.sayBubble, bx, by + 1);
       }
     },
-    [activeLevel.goals],
+    [activeLevel.goals, activeLevel.walls],
   );
 
   useEffect(() => {
@@ -265,6 +267,7 @@ export function Crear() {
 
     const goalCtx: GoalRunContext = {
       goals: activeLevel.goals,
+      walls: activeLevel.walls,
       collected: collectedRef.current,
       onCollect: () => {
         setCollectedGoals(new Set(collectedRef.current));
@@ -335,11 +338,15 @@ export function Crear() {
 
   const tutorialSteps = [
     "Bienvenido a Crear: ¡tu Hora del Código!",
-    "Arrastra bloques al espacio de trabajo o tócalos para añadirlos.",
-    "Cada nivel tiene una misión: llega a la estrella o recoge gemas.",
-    "Pulsa ▶ Reproducir para ver la animación en el escenario.",
-    "Guarda tu proyecto cuando te guste. ¡A programar!",
+    "A la izquierda programas con bloques; en el centro ves el escenario grande.",
+    "A la derecha añades bloques y guardas proyectos.",
+    "Aki es un muñeco que debe esquivar muros y llegar a la meta.",
+    "Pulsa ▶ Reproducir. ¡Hay muchos niveles por descubrir!",
   ];
+
+  const childBlockKinds = activeLevel.allowedBlocks.filter(
+    (k) => k !== "event_start" && k !== "if_blocked",
+  );
 
   return (
     <main className="screen crear">
@@ -349,36 +356,15 @@ export function Crear() {
       <div className="panel crear-panel">
         <header className="crear-header">
           <h1 className="section-title">Crear</h1>
-          <p className="section-sub">Currículo de programación con 15 niveles y retos claros</p>
+          <p className="section-sub">
+            Currículo de programación con {CREAR_CURRICULUM.length} niveles, muros y retos claros
+          </p>
           <button type="button" className="btn btn-ghost crear-tutorial-btn" onClick={() => setShowTutorial(true)}>
             Guía Hora del Código
           </button>
         </header>
 
         <div className="crear-layout">
-          <aside className="crear-palette panel-soft" aria-label="Bloques disponibles">
-            <h2 className="crear-aside-title">Bloques</h2>
-            <p className="crear-hint">Toca un bloque para añadirlo</p>
-            <ul className="crear-palette-list">
-              {BLOCK_DEFS.filter(
-                (d) => d.kind !== "event_start" && activeLevel.allowedBlocks.includes(d.kind),
-              ).map((def) => (
-                <li key={def.kind}>
-                  <button
-                    type="button"
-                    className="crear-block-chip"
-                    style={{ "--block-color": def.color } as React.CSSProperties}
-                    disabled={running}
-                    onClick={() => addBlock(def.kind)}
-                  >
-                    <span aria-hidden>{def.emoji}</span>
-                    {def.label}
-                  </button>
-                </li>
-              ))}
-            </ul>
-          </aside>
-
           <section className="crear-workspace-wrap">
             <div className="crear-level-header panel-soft">
               <h2 className="crear-level-title">{activeLevel.title}</h2>
@@ -478,10 +464,11 @@ export function Crear() {
                         </button>
                       </div>
                     )}
-                    {block.kind === "repeat" && (
-                      <RepeatBody
+                    {(block.kind === "repeat" || block.kind === "if_blocked") && (
+                      <NestedBlockBody
                         block={block}
                         running={running}
+                        allowedKinds={childBlockKinds}
                         onChange={(children) => {
                           setBlocks((prev) =>
                             prev.map((b) => (b.id === block.id ? { ...b, children } : b)),
@@ -497,9 +484,53 @@ export function Crear() {
             <p className="crear-progress-note">
               Completados: {levelProgress.completedLevelIds.length}/{CREAR_CURRICULUM.length}
             </p>
-            {saves.length > 0 && (
-              <div className="crear-saves">
-                <h3 className="crear-saves-title">Proyectos guardados</h3>
+          </section>
+
+          <section className="crear-stage-wrap" aria-label="Escenario">
+            <h2 className="crear-aside-title">Escenario</h2>
+            <canvas
+              ref={stageRef}
+              width={STAGE_SIZE.width}
+              height={STAGE_SIZE.height}
+              className="crear-stage"
+            />
+            {sayFlash && <p className="crear-say-flash">🔊 {sayFlash}</p>}
+            <p className="crear-hint crear-goal-hint">
+              {activeLevel.walls.length > 0
+                ? "Esquiva los muros marrónes"
+                : activeLevel.goals.some((g) => g.kind === "collect")
+                  ? "Recolecta todas las gemas moradas"
+                  : "Llega a la estrella dorada"}
+            </p>
+          </section>
+
+          <aside className="crear-palette panel-soft" aria-label="Acciones y bloques">
+            <h2 className="crear-aside-title">Acciones</h2>
+            <p className="crear-hint">Toca un bloque para añadirlo al programa</p>
+            <ul className="crear-palette-list">
+              {BLOCK_DEFS.filter(
+                (d) => d.kind !== "event_start" && activeLevel.allowedBlocks.includes(d.kind),
+              ).map((def) => (
+                <li key={def.kind}>
+                  <button
+                    type="button"
+                    className="crear-block-chip"
+                    style={{ "--block-color": def.color } as React.CSSProperties}
+                    disabled={running}
+                    onClick={() => addBlock(def.kind)}
+                  >
+                    <span aria-hidden>{def.emoji}</span>
+                    {def.label}
+                  </button>
+                </li>
+              ))}
+            </ul>
+
+            <div className="crear-saves crear-saves-aside">
+              <h3 className="crear-saves-title">Proyectos guardados</h3>
+              {saves.length === 0 ? (
+                <p className="crear-hint">Aún no hay proyectos. Usa 💾 Guardar.</p>
+              ) : (
                 <ul className="crear-saves-list">
                   {saves.map((s) => (
                     <li key={s.id} className="crear-save-row">
@@ -523,24 +554,8 @@ export function Crear() {
                     </li>
                   ))}
                 </ul>
-              </div>
-            )}
-          </section>
-
-          <aside className="crear-stage-wrap" aria-label="Escenario">
-            <h2 className="crear-aside-title">Escenario</h2>
-            <canvas
-              ref={stageRef}
-              width={STAGE_SIZE.width}
-              height={STAGE_SIZE.height}
-              className="crear-stage"
-            />
-            {sayFlash && <p className="crear-say-flash">🔊 {sayFlash}</p>}
-            <p className="crear-hint crear-goal-hint">
-              {activeLevel.goals.some((g) => g.kind === "collect")
-                ? "Recolecta todas las gemas moradas"
-                : "Llega a la estrella dorada"}
-            </p>
+              )}
+            </div>
           </aside>
         </div>
       </div>
@@ -596,19 +611,23 @@ export function Crear() {
   );
 }
 
-function RepeatBody({
+function NestedBlockBody({
   block,
   running,
+  allowedKinds,
   onChange,
 }: {
   block: ProgramBlock;
   running: boolean;
+  allowedKinds: BlockKind[];
   onChange: (children: ProgramBlock[]) => void;
 }) {
   const children = block.children ?? [];
+  const insideLabel =
+    block.kind === "repeat" ? "Dentro del repetir:" : "Si hay pared, haz esto:";
 
   function addChild(kind: BlockKind) {
-    if (kind === "event_start" || kind === "repeat") return;
+    if (kind === "event_start" || kind === "if_blocked") return;
     onChange([...children, createBlock(kind)]);
   }
 
@@ -618,9 +637,9 @@ function RepeatBody({
 
   return (
     <div className="crear-repeat-body">
-      <p className="crear-repeat-label">Dentro del repetir:</p>
+      <p className="crear-repeat-label">{insideLabel}</p>
       <div className="crear-repeat-add">
-        {(["move", "turn_left", "turn_right", "wait", "say"] as BlockKind[]).map((kind) => {
+        {allowedKinds.map((kind) => {
           const def = blockDef(kind);
           return (
             <button

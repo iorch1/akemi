@@ -6,6 +6,7 @@ Static SPA servida por Apache en el servidor **akhio** (mismo patrón que `/coti
 
 ```bash
 npm ci
+npm run android:build && npm run apk:stage   # opcional: APK en public/akemi-android.apk
 npm run build:cloud
 ```
 

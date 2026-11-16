@@ -1,5 +1,5 @@
 .crear-panel {
-  max-width: 72rem;
+  max-width: 90rem;
   margin: 0 auto;
 }
 
@@ -20,8 +20,26 @@
 
 @media (min-width: 900px) {
   .crear-layout {
-    grid-template-columns: minmax(9rem, 12rem) 1fr minmax(12rem, 16rem);
+    grid-template-columns: minmax(13rem, 1.05fr) minmax(18rem, 1.65fr) minmax(10.5rem, 0.75fr);
     align-items: start;
+  }
+
+  .crear-stage-wrap {
+    order: 2;
+  }
+
+  .crear-workspace-wrap {
+    order: 1;
+  }
+
+  .crear-palette {
+    order: 3;
+  }
+}
+
+@media (max-width: 899px) {
+  .crear-stage-wrap {
+    order: 2;
   }
 }
 
@@ -100,6 +118,9 @@
   gap: 0.3rem;
   justify-content: center;
   margin-bottom: 0.65rem;
+  max-height: 5.5rem;
+  overflow-y: auto;
+  padding: 0.15rem;
 }
 
 .crear-level-pill {
@@ -271,9 +292,13 @@
   text-align: center;
 }
 
+.crear-stage-wrap {
+  min-width: 0;
+}
+
 .crear-stage {
   width: 100%;
-  max-width: 360px;
+  max-width: min(100%, 480px);
   height: auto;
   border-radius: 1rem;
   box-shadow: var(--shadow);
@@ -289,6 +314,17 @@
 
 .crear-saves {
   margin-top: 1rem;
+}
+
+.crear-saves-aside {
+  margin-top: 1.25rem;
+  padding-top: 0.85rem;
+  border-top: 2px dashed rgba(11, 58, 74, 0.12);
+}
+
+.crear-saves-aside .crear-saves-list {
+  max-height: 11rem;
+  overflow-y: auto;
 }
 
 .crear-saves-title {
