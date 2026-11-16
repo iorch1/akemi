@@ -16,6 +16,7 @@ const tabs: TabItem[] = [
   { to: "/mates", label: "Mates", emoji: "🔢", prefix: "/mates" },
   { to: "/juegos", label: "Juegos", emoji: "🎮", prefix: "/juegos" },
   { to: "/dibujo", label: "Dibujo", emoji: "🎨", prefix: "/dibujo" },
+  { to: "/rompecabezas", label: "Puzzle", emoji: "🖼️", prefix: "/rompecabezas" },
   { to: "/crear", label: "Crear", emoji: "🧩", prefix: "/crear" },
 ];
 
@@ -30,6 +31,10 @@ export function NativeTabBar() {
 
   if (!isNativeApp()) return null;
   if (/^\/juegos\/(tetris|snake)/.test(pathname)) return null;
+  if (/^\/rompecabezas\/(jugar|pintar)/.test(pathname)) return null;
+  if (typeof document !== "undefined" && document.body.classList.contains("puzzle-immersive")) {
+    return null;
+  }
 
   return (
     <nav className="native-tab-bar" aria-label="Secciones">

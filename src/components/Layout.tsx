@@ -7,7 +7,10 @@ import { NativeTopBar } from "./NativeTopBar";
 export function Layout() {
   const native = isNativeApp();
   const { pathname } = useLocation();
-  const immersive = native && /^\/juegos\/(tetris|snake)/.test(pathname);
+  const immersive =
+    native &&
+    (/^\/juegos\/(tetris|snake)/.test(pathname) ||
+      /^\/rompecabezas\/(jugar|pintar)/.test(pathname));
 
   useEffect(() => {
     document.body.classList.toggle("native-app", native);
