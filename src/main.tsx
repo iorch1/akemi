@@ -1,3 +1,4 @@
+import { Capacitor } from "@capacitor/core";
 import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
 import { BrowserRouter } from "react-router-dom";
@@ -7,12 +8,16 @@ import "./index.css";
 
 void runOtaUpdateCheck();
 
-const routerBasename =
-  import.meta.env.BASE_URL !== "/" ? import.meta.env.BASE_URL.replace(/\/$/, "") : undefined;
+function routerBasename(): string | undefined {
+  if (Capacitor.isNativePlatform()) return undefined;
+  const base = import.meta.env.BASE_URL.replace(/\/$/, "");
+  if (!base || base === "/" || base === ".") return undefined;
+  return base;
+}
 
 createRoot(document.getElementById("root")!).render(
   <StrictMode>
-    <BrowserRouter basename={routerBasename}>
+    <BrowserRouter basename={routerBasename()}>
       <App />
     </BrowserRouter>
   </StrictMode>,

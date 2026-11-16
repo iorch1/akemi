@@ -4,6 +4,7 @@ import { defineConfig } from "vite";
 
 const appVersion = JSON.parse(readFileSync("package.json", "utf8")).version as string;
 
+/** Por defecto `./` (Capacitor). Cloud: `npm run build:cloud` (`--base=/akemi/`). */
 const base = process.env.VITE_DEPLOY_BASE?.replace(/\/?$/, "/") ?? "./";
 
 export default defineConfig({

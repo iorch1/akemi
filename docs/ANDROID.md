@@ -53,7 +53,9 @@ git commit -m "OTA 1.0.1"
 git push
 ```
 
-El script genera `ota/bundles/<bundleId>.zip` y actualiza `ota/manifest.json` con la URL `raw.githubusercontent.com`.
+El script genera `ota/bundles/<bundleId>.zip` (excluye el APK) y actualiza `ota/manifest.json`.
+Por defecto el manifiesto apunta a `https://cloud.akhio.com/akemi/ota/<bundleId>.zip` (sube el zip con `scp` a `~/akemi-web/dist/ota/`).
+Para bundles pequeños en GitHub: `OTA_USE_GITHUB_RAW=1 npm run ota:bundle`.
 
 Los niños que ya tienen el APK solo abren Akemi: la descarga es automática (necesitan internet).
 
@@ -71,7 +73,9 @@ Para correcciones de juegos, lectura o mates, basta con OTA.
 
 | Comando | Descripción |
 |--------|-------------|
-| `npm run cap:sync` | Build web + sincroniza en `android/` |
+| `npm run build:cap` | Build web con `base ./` (Capacitor / OTA) |
+| `npm run build:cloud` | Build web con `base /akemi/` (cloud.akhio.com) |
+| `npm run cap:sync` | `build:cap` + verificación + sync en `android/` |
 | `npm run android:build` | APK debug firmado para sideload |
 | `npm run android:release` | APK release (configura firma en Gradle) |
 | `npm run ota:bundle` | Crea zip OTA + manifiesto |
