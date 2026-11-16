@@ -175,6 +175,35 @@
   margin-bottom: 0.35rem;
 }
 
+.dibujo-canvas-area .color-mixer-bar {
+  margin: 0 0 0.55rem;
+  padding: 0.5rem 0.65rem;
+}
+
+.color-mixer-bar .color-mixer-controls {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.35rem 0.75rem;
+}
+
+.color-mixer-bar .mixer-slider {
+  flex: 1 1 8rem;
+  margin-bottom: 0;
+  min-width: 7rem;
+}
+
+.color-mixer-bar .mixer-preview-row {
+  margin-top: 0;
+  flex: 0 0 auto;
+}
+
+.color-mixer-bar .color-mixer-title {
+  margin: 0 0 0.35rem;
+  font-size: 0.82rem;
+  width: 100%;
+}
+
 .color-mixer-title {
   margin: 0 0 0.5rem;
   font-weight: 800;

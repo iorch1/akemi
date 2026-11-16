@@ -1,5 +1,14 @@
 import type { ProgramBlock } from "./blocks";
+import type { StageGoal } from "./curriculum";
+import { collectAtPosition, goalsComplete, starReached } from "./goals";
 import { speak } from "../../utils/speech";
+
+export type GoalRunContext = {
+  goals: StageGoal[];
+  collected: Set<string>;
+  onCollect: (id: string) => void;
+  onWin?: () => void;
+};
 
 export type SpriteState = {
   x: number;
@@ -20,14 +29,39 @@ export type RuntimeCallbacks = {
 
 const STEP_PX_PER_UNIT = 1;
 
+function checkGoalsAfterTick(
+  state: SpriteState,
+  goalCtx: GoalRunContext | undefined,
+  wonRef: { done: boolean },
+) {
+  if (!goalCtx || wonRef.done) return;
+  for (const g of goalCtx.goals) {
+    if (g.kind === "star" && !goalCtx.collected.has(g.id) && starReached(state, g)) {
+      goalCtx.collected.add(g.id);
+      goalCtx.onCollect(g.id);
+    }
+  }
+  const picked = collectAtPosition(state, goalCtx.goals, goalCtx.collected);
+  for (const id of picked) {
+    goalCtx.collected.add(id);
+    goalCtx.onCollect(id);
+  }
+  if (goalsComplete(goalCtx.goals, goalCtx.collected)) {
+    wonRef.done = true;
+    goalCtx.onWin?.();
+  }
+}
+
 export async function runProgram(
   blocks: ProgramBlock[],
   initial: SpriteState,
   stage: StageSize,
   cb: RuntimeCallbacks,
   signal?: AbortSignal,
+  goalCtx?: GoalRunContext,
 ): Promise<void> {
   let state = { ...initial };
+  const wonRef = { done: false };
 
   const delay = (ms: number) =>
     new Promise<void>((resolve, reject) => {
@@ -48,7 +82,7 @@ export async function runProgram(
   };
 
   try {
-    state = await walk(blocks, state, stage, cb, delay, publish, signal);
+    state = await walk(blocks, state, stage, cb, delay, publish, signal, goalCtx, wonRef);
     cb.onDone();
   } catch (e) {
     if ((e as Error).name === "AbortError") {
@@ -67,10 +101,13 @@ export async function runProgram(
     wait: (ms: number) => Promise<void>,
     publish: (s: SpriteState) => void,
     abort?: AbortSignal,
+    goalCtx?: GoalRunContext,
+    wonRef?: { done: boolean },
   ): Promise<SpriteState> {
     let s = st;
     for (const block of list) {
       if (abort?.aborted) throw new DOMException("Aborted", "AbortError");
+      if (wonRef?.done) return s;
       if (block.kind === "event_start") continue;
 
       if (block.kind === "move") {
@@ -83,6 +120,8 @@ export async function runProgram(
           sayBubble: null,
         };
         publish(s);
+        checkGoalsAfterTick(s, goalCtx, wonRef ?? { done: false });
+        if (wonRef?.done) return s;
         await wait(280);
       } else if (block.kind === "turn_left") {
         s = { ...s, heading: normDeg(s.heading - 90), sayBubble: null };
@@ -108,7 +147,8 @@ export async function runProgram(
         const times = Math.min(20, Math.max(1, Math.floor(Number(block.value ?? 2))));
         const body = block.children ?? [];
         for (let i = 0; i < times; i++) {
-          s = await walk(body, s, stg, callbacks, wait, publish, abort);
+          s = await walk(body, s, stg, callbacks, wait, publish, abort, goalCtx, wonRef);
+          if (wonRef?.done) return s;
         }
       }
     }
