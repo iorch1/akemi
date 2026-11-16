@@ -32,10 +32,16 @@ import {
   type SpriteState,
 } from "../lib/crear/runtime";
 import {
+  createConfetti,
   drawAkemiSprite,
+  drawConfetti,
+  drawStageBackground,
   drawStageGoals,
   drawStageWalls,
+  drawWinSparkles,
   roundRect,
+  stepConfetti,
+  type ConfettiPiece,
 } from "../lib/crear/stage-draw";
 import {
   deleteCreation,
@@ -71,7 +77,6 @@ export function Crear() {
   const [levelProgress, setLevelProgress] = useState<CrearLevelProgress>(() =>
     loadCrearLevelProgress(profileId),
   );
-  const [collectedGoals, setCollectedGoals] = useState<Set<string>>(() => new Set());
   const [celebrate, setCelebrate] = useState<{ open: boolean; level: CrearLevel | null }>({
     open: false,
     level: null,
@@ -80,8 +85,20 @@ export function Crear() {
   const stageRef = useRef<HTMLCanvasElement>(null);
   const collectedRef = useRef<Set<string>>(new Set());
   const lastAppliedLevelRef = useRef<string | null>(null);
+  const confettiRef = useRef<ConfettiPiece[]>([]);
+  const animFrameRef = useRef<number>(0);
+  const spriteRef = useRef<SpriteState>(sprite);
+  const celebrateRef = useRef(celebrate);
   const activeLevel =
     levelById(levelProgress.activeLevelId) ?? CREAR_CURRICULUM[0];
+
+  useEffect(() => {
+    spriteRef.current = sprite;
+  }, [sprite]);
+
+  useEffect(() => {
+    celebrateRef.current = celebrate;
+  }, [celebrate]);
 
   useEffect(() => {
     if (!profileId) return;
@@ -105,43 +122,18 @@ export function Crear() {
   }, []);
 
   const drawStage = useCallback(
-    (st: SpriteState, collected: Set<string>) => {
+    (st: SpriteState, collected: Set<string>, now = performance.now()) => {
       const canvas = stageRef.current;
       if (!canvas) return;
       const ctx = canvas.getContext("2d");
       if (!ctx) return;
       const { width, height } = canvas;
+      const time = { now };
 
       ctx.clearRect(0, 0, width, height);
-      const grd = ctx.createLinearGradient(0, 0, 0, height);
-      grd.addColorStop(0, "#87ceeb");
-      grd.addColorStop(0.55, "#b8e986");
-      grd.addColorStop(1, "#5cb85c");
-      ctx.fillStyle = grd;
-      ctx.fillRect(0, 0, width, height);
-
-      ctx.strokeStyle = "rgba(255,255,255,0.35)";
-      ctx.lineWidth = 1;
-      for (let x = 0; x < width; x += 40) {
-        ctx.beginPath();
-        ctx.moveTo(x, 0);
-        ctx.lineTo(x, height);
-        ctx.stroke();
-      }
-      for (let y = 0; y < height; y += 40) {
-        ctx.beginPath();
-        ctx.moveTo(0, y);
-        ctx.lineTo(width, y);
-        ctx.stroke();
-      }
-
-      ctx.fillStyle = "#ffd166";
-      ctx.beginPath();
-      ctx.arc(width - 42, 42, 22, 0, Math.PI * 2);
-      ctx.fill();
-
+      drawStageBackground(ctx, width, height, time);
       drawStageWalls(ctx, activeLevel.walls);
-      drawStageGoals(ctx, activeLevel.goals, collected);
+      drawStageGoals(ctx, activeLevel.goals, collected, time);
       drawAkemiSprite(ctx, st);
 
       if (st.sayBubble) {
@@ -152,21 +144,53 @@ export function Crear() {
         const pad = 10;
         const w = tw + pad * 2;
         const h = 28;
-        ctx.fillStyle = "rgba(255,255,255,0.95)";
-        ctx.strokeStyle = "rgba(11,58,74,0.2)";
-        roundRect(ctx, bx - w / 2, by - h / 2, w, h, 10);
+        ctx.fillStyle = "rgba(255,255,255,0.96)";
+        ctx.strokeStyle = "rgba(11,58,74,0.18)";
+        ctx.lineWidth = 2;
+        roundRect(ctx, bx - w / 2, by - h / 2, w, h, 12);
         ctx.fill();
         ctx.stroke();
         ctx.fillStyle = varInk();
+        ctx.textAlign = "center";
+        ctx.textBaseline = "middle";
         ctx.fillText(st.sayBubble, bx, by + 1);
+        ctx.textAlign = "start";
+        ctx.textBaseline = "alphabetic";
+      }
+
+      if (celebrateRef.current.open) {
+        drawWinSparkles(ctx, st.x, st.y, time);
+        if (confettiRef.current.length) {
+          stepConfetti(confettiRef.current, width, height);
+          drawConfetti(ctx, confettiRef.current);
+        }
       }
     },
     [activeLevel.goals, activeLevel.walls],
   );
 
+  // Animación suave del escenario (nubes, brillos) + confeti al ganar
   useEffect(() => {
-    drawStage(sprite, collectedGoals);
-  }, [sprite, collectedGoals, drawStage]);
+    let alive = true;
+    const tick = (now: number) => {
+      if (!alive) return;
+      drawStage(spriteRef.current, collectedRef.current, now);
+      animFrameRef.current = requestAnimationFrame(tick);
+    };
+    animFrameRef.current = requestAnimationFrame(tick);
+    return () => {
+      alive = false;
+      cancelAnimationFrame(animFrameRef.current);
+    };
+  }, [drawStage]);
+
+  useEffect(() => {
+    if (celebrate.open) {
+      confettiRef.current = createConfetti(STAGE_SIZE.width, STAGE_SIZE.height);
+    } else {
+      confettiRef.current = [];
+    }
+  }, [celebrate.open]);
 
   function spriteForLevel(level: CrearLevel): SpriteState {
     return {
@@ -180,7 +204,6 @@ export function Crear() {
 
   function resetCollected() {
     collectedRef.current = new Set();
-    setCollectedGoals(new Set());
   }
 
   function resetSpriteForLevel() {
@@ -270,7 +293,6 @@ export function Crear() {
       walls: activeLevel.walls,
       collected: collectedRef.current,
       onCollect: () => {
-        setCollectedGoals(new Set(collectedRef.current));
         drawStage(current, collectedRef.current);
       },
       onWin: handleWin,
@@ -487,19 +509,23 @@ export function Crear() {
           </section>
 
           <section className="crear-stage-wrap" aria-label="Escenario">
-            <h2 className="crear-aside-title">Escenario</h2>
-            <canvas
-              ref={stageRef}
-              width={STAGE_SIZE.width}
-              height={STAGE_SIZE.height}
-              className="crear-stage"
-            />
+            <h2 className="crear-aside-title crear-stage-label">Escenario</h2>
+            <div className="crear-stage-board">
+              <div className="crear-stage-board-inner">
+                <canvas
+                  ref={stageRef}
+                  width={STAGE_SIZE.width}
+                  height={STAGE_SIZE.height}
+                  className="crear-stage"
+                />
+              </div>
+            </div>
             {sayFlash && <p className="crear-say-flash">🔊 {sayFlash}</p>}
             <p className="crear-hint crear-goal-hint">
               {activeLevel.walls.length > 0
-                ? "Esquiva los muros marrónes"
+                ? "Esquiva los bloques y setos de colores"
                 : activeLevel.goals.some((g) => g.kind === "collect")
-                  ? "Recolecta todas las gemas moradas"
+                  ? "Recolecta todas las gemas brillantes"
                   : "Llega a la estrella dorada"}
             </p>
           </section>
