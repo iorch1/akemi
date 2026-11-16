@@ -17,9 +17,17 @@ import {
 } from "../lib/puzzle-grid";
 import { pickRandomColoringImage } from "../lib/puzzle-images";
 import {
+  hashSeed,
+  jigsawMetaForGrid,
+  piecePath2D,
+  piecePathD,
+  pieceTabsFor,
+} from "../lib/puzzle-jigsaw";
+import {
   getPuzzleSession,
   patchPuzzleSession,
   setPuzzleSession,
+  type PuzzleJigsawInfo,
   type PuzzleTile,
 } from "../lib/puzzle-session";
 import {
@@ -57,34 +65,86 @@ function useCanvasUndo(canvasRef: React.RefObject<HTMLCanvasElement | null>) {
   return { snapshot, undo, resetStack };
 }
 
-async function sliceImage(src: string, rows: number, cols: number): Promise<PuzzleTile[]> {
+async function sliceJigsawImage(
+  src: string,
+  rows: number,
+  cols: number,
+  seed: number,
+): Promise<{ tiles: PuzzleTile[]; jigsaw: PuzzleJigsawInfo }> {
   const canvas = document.createElement("canvas");
   canvas.width = BOARD_W;
   canvas.height = BOARD_H;
   const ctx = canvas.getContext("2d");
-  if (!ctx) return [];
+  if (!ctx) {
+    return {
+      tiles: [],
+      jigsaw: jigsawMetaForGrid(rows, cols, BOARD_W, BOARD_H, seed),
+    };
+  }
   await drawSvgOnCanvas(ctx, src, BOARD_W, BOARD_H);
 
-  const pw = BOARD_W / cols;
-  const ph = BOARD_H / rows;
+  const meta = jigsawMetaForGrid(rows, cols, BOARD_W, BOARD_H, seed);
+  const { edges, tabSize, padPx, cellW: pw, cellH: ph } = meta;
   const tiles: PuzzleTile[] = [];
+
   for (let r = 0; r < rows; r++) {
     for (let c = 0; c < cols; c++) {
+      const tabs = pieceTabsFor(r, c, edges);
+      const pathD = piecePathD(pw, ph, tabs, tabSize);
       const piece = document.createElement("canvas");
-      piece.width = Math.max(1, Math.ceil(pw));
-      piece.height = Math.max(1, Math.ceil(ph));
+      piece.width = Math.max(1, Math.ceil(pw) + padPx * 2);
+      piece.height = Math.max(1, Math.ceil(ph) + padPx * 2);
       const pctx = piece.getContext("2d");
       if (!pctx) continue;
-      pctx.drawImage(canvas, c * pw, r * ph, pw, ph, 0, 0, piece.width, piece.height);
+
+      const clip = piecePath2D(pw, ph, tabs, tabSize, padPx, padPx);
+      pctx.save();
+      pctx.clip(clip);
+      // Alinea el tablero para que la celda (c,r) quede en (padPx, padPx)
+      pctx.drawImage(
+        canvas,
+        0,
+        0,
+        BOARD_W,
+        BOARD_H,
+        -c * pw + padPx,
+        -r * ph + padPx,
+        BOARD_W,
+        BOARD_H,
+      );
+      pctx.restore();
+
+      pctx.strokeStyle = "rgba(11, 58, 74, 0.42)";
+      pctx.lineWidth = 1.4;
+      pctx.lineJoin = "round";
+      pctx.stroke(clip);
+
       tiles.push({
         id: cellIndex(r, c, cols),
         row: r,
         col: c,
         dataUrl: piece.toDataURL("image/png"),
+        padPx,
+        coreW: pw,
+        coreH: ph,
+        pathD,
       });
     }
   }
-  return tiles;
+
+  return { tiles, jigsaw: meta };
+}
+
+function pieceImgStyle(tile: PuzzleTile): React.CSSProperties {
+  const wScale = (tile.coreW + tile.padPx * 2) / tile.coreW;
+  const hScale = (tile.coreH + tile.padPx * 2) / tile.coreH;
+  return {
+    position: "absolute",
+    width: `${wScale * 100}%`,
+    height: `${hScale * 100}%`,
+    left: `${(-tile.padPx / tile.coreW) * 100}%`,
+    top: `${(-tile.padPx / tile.coreH) * 100}%`,
+  };
 }
 
 function canvasPointer(canvas: HTMLCanvasElement, clientX: number, clientY: number) {
@@ -115,6 +175,7 @@ export function Rompecabezas() {
   const [tiles, setTiles] = useState<PuzzleTile[]>(saved?.tiles ?? []);
   const [tray, setTray] = useState<number[]>(saved?.tray ?? []);
   const [board, setBoard] = useState<(number | null)[]>(saved?.board ?? []);
+  const [, setJigsaw] = useState<PuzzleJigsawInfo | null>(saved?.jigsaw ?? null);
   const [selectedPiece, setSelectedPiece] = useState<number | null>(null);
   const [loading, setLoading] = useState(false);
   const [shakeSlot, setShakeSlot] = useState<number | null>(null);
@@ -148,10 +209,19 @@ export function Rompecabezas() {
         tray: number[];
         board: (number | null)[];
         winRecorded: boolean;
+        jigsaw: PuzzleJigsawInfo;
       }>,
     ) => {
       const base = getPuzzleSession();
-      if (!base && next.image && next.tiles && next.tray && next.board && next.pieceCount) {
+      if (
+        !base &&
+        next.image &&
+        next.tiles &&
+        next.tray &&
+        next.board &&
+        next.pieceCount &&
+        next.jigsaw
+      ) {
         setPuzzleSession({
           pieceCount: next.pieceCount,
           image: next.image,
@@ -159,6 +229,7 @@ export function Rompecabezas() {
           tray: next.tray,
           board: next.board,
           winRecorded: next.winRecorded ?? false,
+          jigsaw: next.jigsaw,
         });
         return;
       }
@@ -174,8 +245,14 @@ export function Rompecabezas() {
       winRecorded.current = false;
       paintReady.current = false;
       const g = gridForPieceCount(count);
+      const seed = hashSeed(`${img.id}:${count}`);
       try {
-        const sliced = await sliceImage(img.src, g.rows, g.cols);
+        const { tiles: sliced, jigsaw: jig } = await sliceJigsawImage(
+          img.src,
+          g.rows,
+          g.cols,
+          seed,
+        );
         const ids = sliced.map((t) => t.id);
         shuffleInPlace(ids);
         if (ids.every((id, i) => id === i) && ids.length > 1) {
@@ -185,6 +262,7 @@ export function Rompecabezas() {
         setTiles(sliced);
         setTray(ids);
         setBoard(emptyBoard);
+        setJigsaw(jig);
         setImage(img);
         setPieceCount(count);
         setPuzzleSession({
@@ -194,6 +272,7 @@ export function Rompecabezas() {
           tray: ids,
           board: emptyBoard,
           winRecorded: false,
+          jigsaw: jig,
         });
         savePuzzlePrefs(
           {
@@ -208,6 +287,7 @@ export function Rompecabezas() {
         setTiles([]);
         setTray([]);
         setBoard([]);
+        setJigsaw(null);
         setPuzzleSession(null);
       } finally {
         setLoading(false);
@@ -471,41 +551,60 @@ export function Rompecabezas() {
         </p>
       )}
 
-      <div
-        className="puzzle-board"
-        style={{
-          gridTemplateColumns: `repeat(${grid.cols}, 1fr)`,
-          gridTemplateRows: `repeat(${grid.rows}, 1fr)`,
-        }}
-        aria-label="Tablero del rompecabezas"
-      >
-        {board.map((pieceId, slot) => {
-          const tile = pieceId !== null ? tileById.get(pieceId) : null;
-          return (
-            <button
-              key={slot}
-              type="button"
-              data-slot={slot}
-              className={[
-                "puzzle-slot",
-                tile ? "puzzle-slot--filled" : "",
-                shakeSlot === slot ? "puzzle-slot--shake" : "",
-                placedFlash === slot ? "puzzle-slot--flash" : "",
-              ]
-                .filter(Boolean)
-                .join(" ")}
-              onClick={() => onSlotTap(slot)}
-              onPointerUp={() => onBoardPointerUp(slot)}
-              aria-label={tile ? `Pieza colocada ${slot + 1}` : `Hueco ${slot + 1}`}
-            >
-              {tile ? (
-                <img src={tile.dataUrl} alt="" draggable={false} />
-              ) : (
-                <span className="puzzle-slot-empty" />
-              )}
-            </button>
-          );
-        })}
+      <div className="puzzle-board-frame">
+        <div
+          className="puzzle-board"
+          style={{
+            gridTemplateColumns: `repeat(${grid.cols}, 1fr)`,
+            gridTemplateRows: `repeat(${grid.rows}, 1fr)`,
+          }}
+          aria-label="Tablero del rompecabezas"
+        >
+          {board.map((pieceId, slot) => {
+            const tile = pieceId !== null ? tileById.get(pieceId) : null;
+            const ghost = !tile ? tileById.get(slot) : null;
+            return (
+              <button
+                key={slot}
+                type="button"
+                data-slot={slot}
+                className={[
+                  "puzzle-slot",
+                  tile ? "puzzle-slot--filled" : "",
+                  shakeSlot === slot ? "puzzle-slot--shake" : "",
+                  placedFlash === slot ? "puzzle-slot--flash" : "",
+                ]
+                  .filter(Boolean)
+                  .join(" ")}
+                onClick={() => onSlotTap(slot)}
+                onPointerUp={() => onBoardPointerUp(slot)}
+                aria-label={tile ? `Pieza colocada ${slot + 1}` : `Hueco ${slot + 1}`}
+              >
+                {tile ? (
+                  <img
+                    src={tile.dataUrl}
+                    alt=""
+                    draggable={false}
+                    className="puzzle-slot-img"
+                    style={pieceImgStyle(tile)}
+                  />
+                ) : ghost ? (
+                  <svg
+                    className="puzzle-slot-ghost"
+                    viewBox={`${-ghost.padPx} ${-ghost.padPx} ${ghost.coreW + ghost.padPx * 2} ${ghost.coreH + ghost.padPx * 2}`}
+                    preserveAspectRatio="none"
+                    aria-hidden
+                    style={pieceImgStyle(ghost)}
+                  >
+                    <path d={ghost.pathD} />
+                  </svg>
+                ) : (
+                  <span className="puzzle-slot-empty" />
+                )}
+              </button>
+            );
+          })}
+        </div>
       </div>
 
       <div className="puzzle-tray" aria-label="Piezas sueltas">
@@ -514,11 +613,14 @@ export function Rompecabezas() {
           {tray.map((pieceId) => {
             const tile = tileById.get(pieceId);
             if (!tile) return null;
+            const aspect =
+              (tile.coreW + tile.padPx * 2) / (tile.coreH + tile.padPx * 2 || 1);
             return (
               <button
                 key={pieceId}
                 type="button"
                 className={`puzzle-piece${selectedPiece === pieceId ? " selected" : ""}`}
+                style={{ aspectRatio: `${aspect}` }}
                 onClick={() => onTrayTap(pieceId)}
                 onPointerDown={(e) => onPiecePointerDown(pieceId, e)}
                 aria-pressed={selectedPiece === pieceId}
