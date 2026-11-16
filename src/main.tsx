@@ -5,6 +5,7 @@ import { BrowserRouter } from "react-router-dom";
 import App from "./App";
 import { runOtaUpdateCheck } from "./lib/ota-updates";
 import "./index.css";
+import "./native-ui.css";
 
 void runOtaUpdateCheck();
 

@@ -1,0 +1,182 @@
+/* Estilos solo cuando body tiene clase native-app (Capacitor). */
+
+body.native-app {
+  background-attachment: scroll;
+}
+
+body.native-app .app-shell {
+  max-width: none;
+  padding: 0.65rem 0.75rem calc(5.25rem + env(safe-area-inset-bottom, 0px));
+}
+
+body.native-app .app-shell--immersive {
+  padding-bottom: calc(0.75rem + env(safe-area-inset-bottom, 0px));
+}
+
+body.native-app .native-top-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.65rem;
+  margin-bottom: 0.65rem;
+  padding: 0.35rem 0.15rem 0.5rem;
+}
+
+body.native-app .native-top-title {
+  margin: 0;
+  font-family: var(--font-display);
+  font-size: 1.35rem;
+  font-weight: 800;
+  color: var(--paper);
+  text-shadow: 0 2px 6px rgba(11, 58, 74, 0.35);
+}
+
+body.native-app .native-top-profile {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 0.35rem 0.65rem;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.82);
+  text-decoration: none;
+  color: var(--ink);
+  font-weight: 800;
+  font-size: 0.82rem;
+  min-height: 2.75rem;
+  box-shadow: 0 2px 0 rgba(11, 58, 74, 0.1);
+}
+
+body.native-app .native-top-avatar {
+  font-size: 1.35rem;
+  line-height: 1;
+}
+
+body.native-app .native-top-name {
+  max-width: 6.5rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+body.native-app .btn {
+  min-height: 3.25rem;
+  font-size: 1.05rem;
+}
+
+body.native-app .level-pill {
+  min-height: 3rem;
+  font-size: 1.02rem;
+}
+
+body.native-app .pad button {
+  min-height: 3.65rem;
+}
+
+/* Inicio nativo: menos marketing, más colección */
+body.native-app .home-hero--native {
+  padding: 0.5rem 0.25rem 0.75rem;
+}
+
+body.native-app .home-hero--native .home-sun,
+body.native-app .home-hero--native .home-mascot,
+body.native-app .home-hero--native .home-brand,
+body.native-app .home-hero--native .home-tagline,
+body.native-app .home-hero--native .home-cta-hint {
+  display: none;
+}
+
+body.native-app .home-profile-bar--native {
+  background: rgba(255, 255, 255, 0.82);
+  margin-bottom: 0.25rem;
+}
+
+body.native-app .home-grid--native-hidden {
+  display: none;
+}
+
+/* Dibujo: paneles apilados y controles más grandes */
+body.native-app .dibujo-workspace {
+  grid-template-columns: 1fr;
+  gap: 0.75rem;
+}
+
+body.native-app .dibujo-sidebar,
+body.native-app .dibujo-palette-side {
+  padding: 0.75rem;
+}
+
+body.native-app .dibujo-side-item {
+  min-height: 2.85rem;
+  font-size: 0.88rem;
+  padding: 0.5rem 0.65rem;
+}
+
+body.native-app .dibujo-side-scroll {
+  max-height: none;
+}
+
+body.native-app .dibujo-pages {
+  max-height: 10rem;
+}
+
+body.native-app .dibujo-colors-compact .swatch {
+  width: 2.1rem;
+  height: 2.1rem;
+}
+
+body.native-app .btn-mini {
+  min-height: 2.85rem !important;
+  font-size: 0.95rem !important;
+}
+
+body.native-app .tool-family-btn {
+  min-height: 2.85rem;
+  font-size: 0.88rem;
+}
+
+body.native-app .draw-canvas,
+body.native-app .draw-canvas-large {
+  width: min(100%, 100vw - 2.5rem);
+  max-height: min(52dvh, 480px);
+}
+
+body.native-app .free-scroll,
+body.native-app .free-scroll-large {
+  max-height: min(58dvh, 520px);
+}
+
+/* Crear: columna única con scroll cómodo */
+body.native-app .crear-layout {
+  grid-template-columns: 1fr;
+}
+
+body.native-app .crear-level-pill {
+  min-width: 2.65rem;
+  min-height: 2.65rem;
+  font-size: 0.85rem;
+}
+
+body.native-app .crear-block-chip {
+  min-height: 3rem;
+  font-size: 0.9rem;
+}
+
+body.native-app .crear-stack-block {
+  min-height: 3rem;
+}
+
+body.native-app .crear-workspace {
+  max-height: none;
+}
+
+body.native-app .crear-stage {
+  max-width: 100%;
+}
+
+body.native-app .screen {
+  animation: none;
+}
+
+body.native-app .panel {
+  padding: 0.85rem;
+}

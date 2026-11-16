@@ -5,6 +5,7 @@ import { useProgress } from "../hooks/useProgress";
 import { difficultyForAge, difficultyLabel } from "../lib/difficulty";
 import { avatarEmoji } from "../lib/profiles";
 import { ANDROID_APK_LABEL, androidApkDownloadUrl } from "../lib/android-download";
+import { isNativeApp } from "../lib/platform";
 import { countUnlockedImages, nextUnlockSummary, totalImages } from "../lib/progress";
 import "./Home.css";
 
@@ -47,6 +48,7 @@ const sections = [
 ];
 
 export function Home() {
+  const native = isNativeApp();
   const { profile } = useProfileContext();
   const [progress] = useProgress();
   const next = nextUnlockSummary(progress);
@@ -57,37 +59,59 @@ export function Home() {
   return (
     <main className="screen home">
       {profile && (
-        <div className="home-profile-bar panel-soft">
-          <span className="home-profile-avatar">{avatarEmoji(profile.avatar)}</span>
-          <span>
-            Hola, <strong>{profile.nombre}</strong> · {profile.edad} años · {diff}
-          </span>
-          <Link to="/perfiles" className="home-profile-switch">
-            Cambiar jugador
-          </Link>
+        <div className={`home-profile-bar panel-soft${native ? " home-profile-bar--native" : ""}`}>
+          {!native && (
+            <>
+              <span className="home-profile-avatar">{avatarEmoji(profile.avatar)}</span>
+              <span>
+                Hola, <strong>{profile.nombre}</strong> · {profile.edad} años · {diff}
+              </span>
+              <Link to="/perfiles" className="home-profile-switch">
+                Cambiar jugador
+              </Link>
+            </>
+          )}
+          {native && (
+            <span>
+              {diff ? (
+                <>
+                  Nivel <strong>{diff}</strong> · {profile.edad} años
+                </>
+              ) : (
+                <>Perfil de {profile.nombre}</>
+              )}
+            </span>
+          )}
         </div>
       )}
-      <header className="home-hero">
+      <header className={`home-hero${native ? " home-hero--native" : ""}`}>
         <div className="home-sun" aria-hidden />
         <div className="home-mascot" aria-hidden>
           <span className="mascot-face">🌞</span>
         </div>
         <h1 className="brand-mark home-brand">Akemi</h1>
         <p className="home-tagline">Aprende, calcula y colorea los libros Robcrea</p>
-        <p className="home-cta-hint">Elige una aventura</p>
-        <a
-          className="home-android-download btn btn-sky"
-          href={androidApkDownloadUrl()}
-          download="akemi-android.apk"
-        >
-          📱 {ANDROID_APK_LABEL}
-        </a>
-        <p className="home-android-hint">
-          Instala en el teléfono (Android). Si pide permiso, permite orígenes desconocidos.
-        </p>
+        {!native && <p className="home-cta-hint">Elige una aventura</p>}
+        {!native && (
+          <>
+            <a
+              className="home-android-download btn btn-sky"
+              href={androidApkDownloadUrl()}
+              download="akemi-android.apk"
+            >
+              📱 {ANDROID_APK_LABEL}
+            </a>
+            <p className="home-android-hint">
+              Instala en el teléfono (Android). Si pide permiso, permite orígenes desconocidos.
+            </p>
+          </>
+        )}
       </header>
 
-      <nav className="home-grid home-grid-primary" aria-label="Secciones principales">
+      <nav
+        className={`home-grid home-grid-primary${native ? " home-grid--native-hidden" : ""}`}
+        aria-label="Secciones principales"
+      >
         {sections.map((s) => (
           <Link key={s.to} to={s.to} className={`home-tile ${s.className}`}>
             <span className="tile-emoji" aria-hidden>
