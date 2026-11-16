@@ -4,8 +4,10 @@ import { defineConfig } from "vite";
 
 const appVersion = JSON.parse(readFileSync("package.json", "utf8")).version as string;
 
+const base = process.env.VITE_DEPLOY_BASE?.replace(/\/?$/, "/") ?? "./";
+
 export default defineConfig({
-  base: "./",
+  base,
   plugins: [react()],
   define: {
     "import.meta.env.VITE_BUILTIN_BUNDLE_ID": JSON.stringify(appVersion),
