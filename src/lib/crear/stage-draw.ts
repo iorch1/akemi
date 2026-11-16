@@ -1,23 +1,8 @@
-import type { StageGoal } from "./curriculum";
-import type { StageWall } from "./obstacles";
-import type { SpriteState } from "./runtime";
+import type { FlagGoal, LowObstacle, Platform, PlayerState } from "./physics";
+import { playerHeight } from "./physics";
 
-/** Tiempo en ms para animaciones suaves del escenario (brillos, nubes, confeti). */
 export type StageDrawTime = { now?: number };
-
-function starShape(ctx: CanvasRenderingContext2D, cx: number, cy: number, outer: number, points: number) {
-  const inner = outer * 0.42;
-  ctx.beginPath();
-  for (let i = 0; i < points * 2; i++) {
-    const r = i % 2 === 0 ? outer : inner;
-    const a = (Math.PI / points) * i - Math.PI / 2;
-    const x = cx + Math.cos(a) * r;
-    const y = cy + Math.sin(a) * r;
-    if (i === 0) ctx.moveTo(x, y);
-    else ctx.lineTo(x, y);
-  }
-  ctx.closePath();
-}
+export type Camera = { x: number };
 
 function cloudBlob(ctx: CanvasRenderingContext2D, x: number, y: number, s: number, alpha: number) {
   ctx.fillStyle = `rgba(255,255,255,${alpha})`;
@@ -29,377 +14,68 @@ function cloudBlob(ctx: CanvasRenderingContext2D, x: number, y: number, s: numbe
   ctx.fill();
 }
 
-/** Fondo infantil: cielo, nubes, sol, pasto con textura y borde suave. */
+/** Cielo, nubes y colinas — atmósfera de platformer infantil (estilo original). */
 export function drawStageBackground(
   ctx: CanvasRenderingContext2D,
   width: number,
   height: number,
   time: StageDrawTime = {},
+  camera: Camera = { x: 0 },
 ) {
   const t = time.now ?? 0;
-  const skyH = height * 0.58;
+  const cam = camera.x;
 
-  const sky = ctx.createLinearGradient(0, 0, 0, skyH);
-  sky.addColorStop(0, "#7ec8f5");
-  sky.addColorStop(0.55, "#a8dff8");
-  sky.addColorStop(1, "#c8efc0");
+  const sky = ctx.createLinearGradient(0, 0, 0, height);
+  sky.addColorStop(0, "#5ec8f0");
+  sky.addColorStop(0.45, "#8edaf5");
+  sky.addColorStop(0.72, "#b8e8a8");
+  sky.addColorStop(1, "#7bc45a");
   ctx.fillStyle = sky;
-  ctx.fillRect(0, 0, width, skyH);
+  ctx.fillRect(0, 0, width, height);
 
-  const grass = ctx.createLinearGradient(0, skyH - 20, 0, height);
-  grass.addColorStop(0, "#8fd46a");
-  grass.addColorStop(0.45, "#6fc24a");
-  grass.addColorStop(1, "#4e9e36");
-  ctx.fillStyle = grass;
-  ctx.fillRect(0, skyH - 18, width, height - skyH + 18);
-
-  // Colinas suaves
-  ctx.fillStyle = "rgba(110, 190, 70, 0.55)";
-  ctx.beginPath();
-  ctx.moveTo(0, skyH + 8);
-  ctx.quadraticCurveTo(width * 0.22, skyH - 28, width * 0.45, skyH + 4);
-  ctx.quadraticCurveTo(width * 0.7, skyH + 36, width, skyH - 6);
-  ctx.lineTo(width, skyH + 40);
-  ctx.lineTo(0, skyH + 40);
-  ctx.closePath();
-  ctx.fill();
-
-  // Sol con rayos suaves
-  const sunX = width - 48;
-  const sunY = 46;
+  // Sol
+  const sunX = width - 56;
+  const sunY = 42;
   const pulse = 1 + Math.sin(t / 700) * 0.04;
-  const sunGlow = ctx.createRadialGradient(sunX, sunY, 6, sunX, sunY, 38 * pulse);
+  const sunGlow = ctx.createRadialGradient(sunX, sunY, 6, sunX, sunY, 40 * pulse);
   sunGlow.addColorStop(0, "rgba(255, 236, 140, 0.95)");
-  sunGlow.addColorStop(0.45, "rgba(255, 200, 60, 0.55)");
-  sunGlow.addColorStop(1, "rgba(255, 200, 60, 0)");
+  sunGlow.addColorStop(0.5, "rgba(255, 196, 50, 0.45)");
+  sunGlow.addColorStop(1, "rgba(255, 196, 50, 0)");
   ctx.fillStyle = sunGlow;
   ctx.beginPath();
-  ctx.arc(sunX, sunY, 38 * pulse, 0, Math.PI * 2);
+  ctx.arc(sunX, sunY, 40 * pulse, 0, Math.PI * 2);
   ctx.fill();
   ctx.fillStyle = "#ffe566";
   ctx.beginPath();
   ctx.arc(sunX, sunY, 20, 0, Math.PI * 2);
   ctx.fill();
-  ctx.fillStyle = "#fff3a8";
+
+  // Nubes con parallax suave
+  const drift = (t / 35 + cam * 0.15) % (width + 160);
+  cloudBlob(ctx, ((70 + drift) % (width + 160)) - 50, 36, 24, 0.92);
+  cloudBlob(ctx, ((220 + drift * 0.7) % (width + 140)) - 40, 58, 18, 0.8);
+  cloudBlob(ctx, ((380 + drift * 0.5) % (width + 120)) - 30, 28, 16, 0.88);
+
+  // Colinas lejanas (parallax)
+  const hillShift = -cam * 0.25;
+  ctx.fillStyle = "rgba(90, 170, 70, 0.45)";
   ctx.beginPath();
-  ctx.arc(sunX - 5, sunY - 5, 6, 0, Math.PI * 2);
-  ctx.fill();
-
-  // Nubes que se desplazan muy despacio
-  const drift = (t / 40) % (width + 120);
-  cloudBlob(ctx, ((80 + drift) % (width + 120)) - 40, 38, 22, 0.92);
-  cloudBlob(ctx, ((210 + drift * 0.7) % (width + 140)) - 50, 62, 18, 0.78);
-  cloudBlob(ctx, ((340 + drift * 0.55) % (width + 100)) - 30, 28, 16, 0.85);
-
-  // Textura de césped (líneas/tallos)
-  ctx.strokeStyle = "rgba(255,255,255,0.18)";
-  ctx.lineWidth = 1.5;
-  for (let i = 0; i < width; i += 14) {
-    const gx = i + ((i * 7) % 5);
-    const gy = skyH + 10 + ((i * 3) % 9);
-    ctx.beginPath();
-    ctx.moveTo(gx, gy + 10);
-    ctx.lineTo(gx - 2, gy);
-    ctx.moveTo(gx, gy + 10);
-    ctx.lineTo(gx + 3, gy + 1);
-    ctx.stroke();
-  }
-
-  // Flores pequeñas decorativas (solo visual)
-  const flowers = [
-    { x: 28, y: height - 28, c: "#ff7aa2" },
-    { x: 62, y: height - 22, c: "#ffd166" },
-    { x: width - 34, y: height - 30, c: "#ff9f68" },
-    { x: width - 70, y: height - 20, c: "#7bdff2" },
-  ];
-  for (const f of flowers) {
-    ctx.fillStyle = f.c;
-    for (let p = 0; p < 5; p++) {
-      const a = (p / 5) * Math.PI * 2;
-      ctx.beginPath();
-      ctx.ellipse(f.x + Math.cos(a) * 5, f.y + Math.sin(a) * 5, 4, 3, a, 0, Math.PI * 2);
-      ctx.fill();
-    }
-    ctx.fillStyle = "#ffe66d";
-    ctx.beginPath();
-    ctx.arc(f.x, f.y, 3, 0, Math.PI * 2);
-    ctx.fill();
-  }
-
-  // Cuadrícula muy suave (ayuda a planificar sin verse “plana”)
-  ctx.strokeStyle = "rgba(255,255,255,0.16)";
-  ctx.lineWidth = 1;
-  for (let x = 0; x < width; x += 40) {
-    ctx.beginPath();
-    ctx.moveTo(x, skyH - 10);
-    ctx.lineTo(x, height);
-    ctx.stroke();
-  }
-  for (let y = Math.ceil((skyH - 10) / 40) * 40; y < height; y += 40) {
-    ctx.beginPath();
-    ctx.moveTo(0, y);
-    ctx.lineTo(width, y);
-    ctx.stroke();
-  }
-
-  // Marco interior redondeado (clip visual con borde)
-  ctx.strokeStyle = "rgba(255,255,255,0.55)";
-  ctx.lineWidth = 6;
-  roundRectPath(ctx, 3, 3, width - 6, height - 6, 18);
-  ctx.stroke();
-  ctx.strokeStyle = "rgba(46, 140, 90, 0.35)";
-  ctx.lineWidth = 2;
-  roundRectPath(ctx, 6, 6, width - 12, height - 12, 16);
-  ctx.stroke();
-}
-
-/** Estrella dorada de meta con brillo animado. */
-export function drawGoalStar(
-  ctx: CanvasRenderingContext2D,
-  x: number,
-  y: number,
-  time: StageDrawTime = {},
-) {
-  const t = time.now ?? 0;
-  const bob = Math.sin(t / 380) * 2.5;
-  const cy = y + bob;
-  const glowR = 30 + Math.sin(t / 280) * 4;
-
-  const glow = ctx.createRadialGradient(x, cy, 4, x, cy, glowR);
-  glow.addColorStop(0, "rgba(255, 240, 150, 0.85)");
-  glow.addColorStop(0.5, "rgba(255, 200, 60, 0.35)");
-  glow.addColorStop(1, "rgba(255, 200, 60, 0)");
-  ctx.fillStyle = glow;
-  ctx.beginPath();
-  ctx.arc(x, cy, glowR, 0, Math.PI * 2);
-  ctx.fill();
-
-  // Sombra suave
-  ctx.fillStyle = "rgba(80, 60, 20, 0.18)";
-  ctx.beginPath();
-  ctx.ellipse(x, y + 22, 14, 5, 0, 0, Math.PI * 2);
-  ctx.fill();
-
-  const g = ctx.createRadialGradient(x - 4, cy - 8, 2, x, cy, 24);
-  g.addColorStop(0, "#fff8c8");
-  g.addColorStop(0.4, "#ffe066");
-  g.addColorStop(0.75, "#ffb703");
-  g.addColorStop(1, "#f48c06");
-  ctx.fillStyle = g;
-  ctx.strokeStyle = "#c77d0a";
-  ctx.lineWidth = 2.2;
-  starShape(ctx, x, cy, 23, 5);
-  ctx.fill();
-  ctx.stroke();
-
-  ctx.fillStyle = "rgba(255,255,255,0.7)";
-  ctx.beginPath();
-  ctx.arc(x - 5, cy - 7, 3.5, 0, Math.PI * 2);
-  ctx.fill();
-
-  // Destellos
-  ctx.strokeStyle = "rgba(255,255,255,0.85)";
-  ctx.lineWidth = 2;
-  const spark = 6 + Math.sin(t / 200) * 2;
-  ctx.beginPath();
-  ctx.moveTo(x + 16, cy - 14);
-  ctx.lineTo(x + 16 + spark, cy - 14);
-  ctx.moveTo(x + 16 + spark / 2, cy - 14 - spark / 2);
-  ctx.lineTo(x + 16 + spark / 2, cy - 14 + spark / 2);
-  ctx.stroke();
-}
-
-/** Gema coleccionable brillante (forma y hitbox visual centrados en x,y). */
-export function drawGoalGem(
-  ctx: CanvasRenderingContext2D,
-  x: number,
-  y: number,
-  time: StageDrawTime = {},
-) {
-  const t = time.now ?? 0;
-  const bob = Math.sin(t / 420 + x * 0.02) * 2;
-  const cy = y + bob;
-
-  ctx.save();
-  ctx.translate(x, cy);
-
-  ctx.fillStyle = "rgba(60, 40, 90, 0.16)";
-  ctx.beginPath();
-  ctx.ellipse(0, 20, 11, 4, 0, 0, Math.PI * 2);
-  ctx.fill();
-
-  const glow = ctx.createRadialGradient(0, 0, 2, 0, 0, 26);
-  glow.addColorStop(0, "rgba(180, 120, 255, 0.45)");
-  glow.addColorStop(1, "rgba(180, 120, 255, 0)");
-  ctx.fillStyle = glow;
-  ctx.beginPath();
-  ctx.arc(0, 0, 26, 0, Math.PI * 2);
-  ctx.fill();
-
-  const body = ctx.createLinearGradient(-10, -18, 12, 20);
-  body.addColorStop(0, "#e0aaff");
-  body.addColorStop(0.35, "#c77dff");
-  body.addColorStop(0.7, "#9b5de5");
-  body.addColorStop(1, "#5a189a");
-  ctx.fillStyle = body;
-  ctx.strokeStyle = "#3c096c";
-  ctx.lineWidth = 2;
-  ctx.beginPath();
-  ctx.moveTo(0, -17);
-  ctx.lineTo(13, -3);
-  ctx.lineTo(8, 18);
-  ctx.lineTo(-8, 18);
-  ctx.lineTo(-13, -3);
-  ctx.closePath();
-  ctx.fill();
-  ctx.stroke();
-
-  // Facetas
-  ctx.strokeStyle = "rgba(255,255,255,0.35)";
-  ctx.lineWidth = 1.2;
-  ctx.beginPath();
-  ctx.moveTo(0, -17);
-  ctx.lineTo(0, 18);
-  ctx.moveTo(-13, -3);
-  ctx.lineTo(13, -3);
-  ctx.stroke();
-
-  ctx.fillStyle = "rgba(255,255,255,0.55)";
-  ctx.beginPath();
-  ctx.moveTo(-5, -10);
-  ctx.lineTo(1, -2);
-  ctx.lineTo(-3, 6);
+  ctx.moveTo(hillShift - 40, height * 0.72);
+  ctx.quadraticCurveTo(hillShift + width * 0.25, height * 0.55, hillShift + width * 0.5, height * 0.7);
+  ctx.quadraticCurveTo(hillShift + width * 0.75, height * 0.82, hillShift + width + 40, height * 0.62);
+  ctx.lineTo(hillShift + width + 40, height);
+  ctx.lineTo(hillShift - 40, height);
   ctx.closePath();
   ctx.fill();
 
-  ctx.restore();
-}
-
-export function drawStageGoals(
-  ctx: CanvasRenderingContext2D,
-  goals: StageGoal[],
-  collected: Set<string>,
-  time: StageDrawTime = {},
-) {
-  for (const g of goals) {
-    if (g.kind === "collect" && collected.has(g.id)) continue;
-    if (g.kind === "star") drawGoalStar(ctx, g.x, g.y, time);
-    else drawGoalGem(ctx, g.x, g.y, time);
-  }
-}
-
-/** Muñeco infantil «Aki» más expresivo (hitbox de colisión no cambia). */
-export function drawAkemiSprite(ctx: CanvasRenderingContext2D, st: SpriteState) {
-  ctx.save();
-  ctx.translate(st.x, st.y);
-  ctx.rotate((st.heading * Math.PI) / 180);
-
-  // Sombra
-  ctx.fillStyle = "rgba(40, 60, 40, 0.2)";
+  ctx.fillStyle = "rgba(70, 150, 55, 0.5)";
   ctx.beginPath();
-  ctx.ellipse(0, 26, 14, 5, 0, 0, Math.PI * 2);
-  ctx.fill();
-
-  // Piernas
-  ctx.fillStyle = "#3a86ff";
-  roundRectPath(ctx, -11, 14, 9, 12, 3);
-  ctx.fill();
-  roundRectPath(ctx, 2, 14, 9, 12, 3);
-  ctx.fill();
-
-  // Zapatos
-  ctx.fillStyle = "#fb5607";
-  roundRectPath(ctx, -12, 23, 10, 5, 2);
-  ctx.fill();
-  roundRectPath(ctx, 2, 23, 10, 5, 2);
-  ctx.fill();
-
-  // Cuerpo (camiseta coral viva)
-  const shirt = ctx.createLinearGradient(-12, 0, 12, 20);
-  shirt.addColorStop(0, "#ff8fab");
-  shirt.addColorStop(1, "#ff5c8a");
-  ctx.fillStyle = shirt;
-  roundRectPath(ctx, -12, 2, 24, 18, 8);
-  ctx.fill();
-  ctx.strokeStyle = "#c9184a";
-  ctx.lineWidth = 1.6;
-  ctx.stroke();
-
-  // Botón / detalle
-  ctx.fillStyle = "#ffe066";
-  ctx.beginPath();
-  ctx.arc(0, 11, 2.5, 0, Math.PI * 2);
-  ctx.fill();
-
-  // Brazos
-  ctx.fillStyle = "#ffcad4";
-  roundRectPath(ctx, -17, 4, 7, 12, 3.5);
-  ctx.fill();
-  roundRectPath(ctx, 10, 4, 7, 12, 3.5);
-  ctx.fill();
-
-  // Cabeza
-  const face = ctx.createRadialGradient(-2, -12, 2, 0, -8, 14);
-  face.addColorStop(0, "#ffe5ec");
-  face.addColorStop(1, "#ffb3c6");
-  ctx.fillStyle = face;
-  roundRectPath(ctx, -11, -20, 22, 24, 11);
-  ctx.fill();
-  ctx.strokeStyle = "#e85a7a";
-  ctx.lineWidth = 1.5;
-  ctx.stroke();
-
-  // Cabello mechón
-  ctx.fillStyle = "#6d4c41";
-  ctx.beginPath();
-  ctx.ellipse(-2, -20, 12, 6, -0.15, Math.PI, Math.PI * 2);
-  ctx.fill();
-  ctx.beginPath();
-  ctx.ellipse(6, -18, 5, 4, 0.3, 0, Math.PI * 2);
-  ctx.fill();
-
-  // Ojos grandes
-  ctx.fillStyle = "#fff";
-  ctx.beginPath();
-  ctx.ellipse(-4.5, -10, 3.6, 4.2, 0, 0, Math.PI * 2);
-  ctx.ellipse(4.5, -10, 3.6, 4.2, 0, 0, Math.PI * 2);
-  ctx.fill();
-  ctx.fillStyle = "#2b2d42";
-  ctx.beginPath();
-  ctx.arc(-3.8, -9.5, 2.1, 0, Math.PI * 2);
-  ctx.arc(5.2, -9.5, 2.1, 0, Math.PI * 2);
-  ctx.fill();
-  ctx.fillStyle = "#fff";
-  ctx.beginPath();
-  ctx.arc(-4.8, -10.8, 0.9, 0, Math.PI * 2);
-  ctx.arc(4.2, -10.8, 0.9, 0, Math.PI * 2);
-  ctx.fill();
-
-  // Mejillas
-  ctx.fillStyle = "rgba(255, 120, 140, 0.45)";
-  ctx.beginPath();
-  ctx.ellipse(-8, -4, 2.8, 1.8, 0, 0, Math.PI * 2);
-  ctx.ellipse(8, -4, 2.8, 1.8, 0, 0, Math.PI * 2);
-  ctx.fill();
-
-  // Sonrisa
-  ctx.strokeStyle = "#c9184a";
-  ctx.lineWidth = 1.6;
-  ctx.lineCap = "round";
-  ctx.beginPath();
-  ctx.arc(0, -3.5, 4.2, 0.2, Math.PI - 0.2);
-  ctx.stroke();
-
-  // Flecha de dirección sutil (nariz / punta)
-  ctx.fillStyle = "#ff6b6b";
-  ctx.beginPath();
-  ctx.moveTo(12, -6);
-  ctx.lineTo(18, 0);
-  ctx.lineTo(12, 6);
+  ctx.moveTo(hillShift + 80, height * 0.78);
+  ctx.quadraticCurveTo(hillShift + width * 0.4, height * 0.62, hillShift + width * 0.85, height * 0.76);
+  ctx.lineTo(hillShift + width + 20, height);
+  ctx.lineTo(hillShift + 60, height);
   ctx.closePath();
   ctx.fill();
-
-  ctx.restore();
 }
 
 function roundRectPath(
@@ -420,114 +96,304 @@ function roundRectPath(
   ctx.closePath();
 }
 
-const TOY_PALETTE = [
-  { top: "#ffadad", side: "#ff6b6b", edge: "#d62828" },
-  { top: "#ffd6a5", side: "#fb8500", edge: "#ca6702" },
-  { top: "#fdffb6", side: "#90be6d", edge: "#588157" },
-  { top: "#caffbf", side: "#2ec4b6", edge: "#1a8a80" },
-  { top: "#9bf6ff", side: "#4cc9f0", edge: "#0077b6" },
-  { top: "#bdb2ff", side: "#7b2cbf", edge: "#5a189a" },
-];
-
-/** Muros como bloques de juguete / setos amigables (misma hitbox geométrica). */
-export function drawStageWalls(ctx: CanvasRenderingContext2D, walls: StageWall[]) {
-  walls.forEach((wall, wi) => {
-    const tall = wall.h >= wall.w * 0.85;
-    if (tall && wall.h > 50) {
-      drawHedgeWall(ctx, wall);
-    } else {
-      drawToyBlockWall(ctx, wall, wi);
-    }
-  });
+function drawBrick(ctx: CanvasRenderingContext2D, x: number, y: number, w: number, h: number) {
+  ctx.fillStyle = "#c4744a";
+  ctx.fillRect(x, y, w, h);
+  ctx.fillStyle = "#d9895c";
+  ctx.fillRect(x, y, w, Math.max(4, h * 0.35));
+  ctx.strokeStyle = "#8a4330";
+  ctx.lineWidth = 1.5;
+  ctx.strokeRect(x + 0.5, y + 0.5, w - 1, h - 1);
+  // Juntas
+  ctx.strokeStyle = "rgba(90, 40, 25, 0.35)";
+  ctx.beginPath();
+  for (let bx = x + 16; bx < x + w; bx += 16) {
+    ctx.moveTo(bx, y);
+    ctx.lineTo(bx, y + h);
+  }
+  for (let by = y + 10; by < y + h; by += 10) {
+    ctx.moveTo(x, by);
+    ctx.lineTo(x + w, by);
+  }
+  ctx.stroke();
 }
 
-function drawToyBlockWall(ctx: CanvasRenderingContext2D, wall: StageWall, index: number) {
-  const pal = TOY_PALETTE[index % TOY_PALETTE.length];
-  const depth = Math.min(8, Math.floor(wall.h / 4));
-
-  // Sombra
-  ctx.fillStyle = "rgba(40, 50, 40, 0.18)";
-  roundRectPath(ctx, wall.x + 3, wall.y + 4, wall.w, wall.h, 8);
+function drawGrassPlatform(ctx: CanvasRenderingContext2D, x: number, y: number, w: number, h: number) {
+  ctx.fillStyle = "#8b5a2b";
+  ctx.fillRect(x, y + 6, w, h - 6);
+  ctx.fillStyle = "#6b4420";
+  ctx.fillRect(x, y + h - 4, w, 4);
+  // Césped encima
+  const grass = ctx.createLinearGradient(x, y, x, y + 10);
+  grass.addColorStop(0, "#9be564");
+  grass.addColorStop(1, "#4f9e2f");
+  ctx.fillStyle = grass;
+  roundRectPath(ctx, x - 1, y, w + 2, 10, 4);
   ctx.fill();
-
-  // Cara lateral 3D
-  ctx.fillStyle = pal.side;
-  ctx.beginPath();
-  ctx.moveTo(wall.x, wall.y + wall.h - depth);
-  ctx.lineTo(wall.x + wall.w, wall.y + wall.h - depth);
-  ctx.lineTo(wall.x + wall.w, wall.y + wall.h);
-  ctx.lineTo(wall.x, wall.y + wall.h);
-  ctx.closePath();
-  ctx.fill();
-
-  // Cara superior
-  const g = ctx.createLinearGradient(wall.x, wall.y, wall.x, wall.y + wall.h);
-  g.addColorStop(0, pal.top);
-  g.addColorStop(1, pal.side);
-  ctx.fillStyle = g;
-  roundRectPath(ctx, wall.x, wall.y, wall.w, wall.h - depth + 2, 8);
-  ctx.fill();
-  ctx.strokeStyle = pal.edge;
-  ctx.lineWidth = 2;
-  roundRectPath(ctx, wall.x, wall.y, wall.w, wall.h, 8);
+  ctx.strokeStyle = "#3d7a24";
+  ctx.lineWidth = 1.5;
   ctx.stroke();
-
-  // “Tachuelas” de juguete
-  const knobs = Math.max(1, Math.floor(wall.w / 22));
-  const rows = Math.max(1, Math.floor((wall.h - depth) / 20));
-  for (let r = 0; r < rows; r++) {
-    for (let k = 0; k < knobs; k++) {
-      const kx = wall.x + ((k + 0.5) / knobs) * wall.w;
-      const ky = wall.y + 10 + r * ((wall.h - depth - 12) / Math.max(rows, 1));
-      ctx.fillStyle = "rgba(255,255,255,0.45)";
-      ctx.beginPath();
-      ctx.arc(kx, ky, 4.5, 0, Math.PI * 2);
-      ctx.fill();
-      ctx.fillStyle = "rgba(0,0,0,0.12)";
-      ctx.beginPath();
-      ctx.arc(kx + 1, ky + 1.5, 4.5, 0, Math.PI * 2);
-      ctx.fill();
-      ctx.fillStyle = pal.top;
-      ctx.beginPath();
-      ctx.arc(kx, ky, 3.2, 0, Math.PI * 2);
-      ctx.fill();
-    }
+  // Tallos
+  ctx.strokeStyle = "rgba(255,255,255,0.35)";
+  for (let i = x + 4; i < x + w; i += 8) {
+    ctx.beginPath();
+    ctx.moveTo(i, y + 9);
+    ctx.lineTo(i - 1, y + 2);
+    ctx.stroke();
   }
 }
 
-function drawHedgeWall(ctx: CanvasRenderingContext2D, wall: StageWall) {
-  ctx.fillStyle = "rgba(40, 60, 30, 0.16)";
-  roundRectPath(ctx, wall.x + 2, wall.y + 3, wall.w, wall.h, 12);
-  ctx.fill();
-
-  const g = ctx.createLinearGradient(wall.x, wall.y, wall.x, wall.y + wall.h);
-  g.addColorStop(0, "#95d5b2");
-  g.addColorStop(0.5, "#52b788");
-  g.addColorStop(1, "#2d6a4f");
-  ctx.fillStyle = g;
-  roundRectPath(ctx, wall.x, wall.y, wall.w, wall.h, 14);
-  ctx.fill();
-  ctx.strokeStyle = "#1b4332";
-  ctx.lineWidth = 2;
-  ctx.stroke();
-
-  // Hojas / bolitas
-  const leafColors = ["#b7e4c7", "#74c69d", "#40916c", "#d8f3dc"];
-  for (let i = 0; i < 10; i++) {
-    const lx = wall.x + 8 + ((i * 37) % Math.max(8, wall.w - 16));
-    const ly = wall.y + 8 + ((i * 53) % Math.max(8, wall.h - 16));
-    ctx.fillStyle = leafColors[i % leafColors.length];
+function drawGroundStrip(ctx: CanvasRenderingContext2D, x: number, y: number, w: number, h: number) {
+  const soil = ctx.createLinearGradient(x, y, x, y + h);
+  soil.addColorStop(0, "#7d4f28");
+  soil.addColorStop(0.25, "#a06a3a");
+  soil.addColorStop(1, "#5c3818");
+  ctx.fillStyle = soil;
+  ctx.fillRect(x, y, w, h);
+  // Franja de pasto
+  ctx.fillStyle = "#5cb338";
+  ctx.fillRect(x, y, w, 10);
+  ctx.fillStyle = "#8fdc5a";
+  ctx.fillRect(x, y, w, 5);
+  for (let i = x; i < x + w; i += 7) {
+    ctx.fillStyle = i % 14 === 0 ? "#6fcc42" : "#4aa028";
+    ctx.fillRect(i, y - 3, 4, 5);
+  }
+  // Piedras
+  ctx.fillStyle = "rgba(0,0,0,0.12)";
+  for (let i = x + 12; i < x + w; i += 28) {
     ctx.beginPath();
-    ctx.ellipse(lx, ly, 6, 4.5, (i % 3) * 0.4, 0, Math.PI * 2);
+    ctx.ellipse(i, y + 22, 5, 3, 0, 0, Math.PI * 2);
     ctx.fill();
   }
+}
 
-  // Bayas
+function drawPipeBody(ctx: CanvasRenderingContext2D, x: number, y: number, w: number, h: number) {
+  const rim = 8;
+  // Cuerpo
+  const body = ctx.createLinearGradient(x, y, x + w, y);
+  body.addColorStop(0, "#2f9e4a");
+  body.addColorStop(0.35, "#49c46a");
+  body.addColorStop(0.7, "#2d8f45");
+  body.addColorStop(1, "#1f6b32");
+  ctx.fillStyle = body;
+  roundRectPath(ctx, x + 3, y + rim - 2, w - 6, h - rim + 2, 6);
+  ctx.fill();
+  // Boca / rim
+  const top = ctx.createLinearGradient(x, y, x + w, y);
+  top.addColorStop(0, "#3eb85a");
+  top.addColorStop(0.5, "#6ae087");
+  top.addColorStop(1, "#2f9e4a");
+  ctx.fillStyle = top;
+  roundRectPath(ctx, x - 2, y, w + 4, rim + 2, 6);
+  ctx.fill();
+  ctx.strokeStyle = "#1a5c2c";
+  ctx.lineWidth = 2;
+  roundRectPath(ctx, x - 2, y, w + 4, rim + 2, 6);
+  ctx.stroke();
+  // Highlight
+  ctx.fillStyle = "rgba(255,255,255,0.25)";
+  ctx.fillRect(x + 8, y + rim + 4, 5, Math.max(8, h - rim - 10));
+}
+
+function drawBlock(ctx: CanvasRenderingContext2D, x: number, y: number, w: number, h: number) {
+  const g = ctx.createLinearGradient(x, y, x, y + h);
+  g.addColorStop(0, "#ffd56a");
+  g.addColorStop(1, "#e09a2b");
+  ctx.fillStyle = g;
+  roundRectPath(ctx, x, y, w, h, 5);
+  ctx.fill();
+  ctx.strokeStyle = "#b56e12";
+  ctx.lineWidth = 2;
+  ctx.stroke();
+  ctx.fillStyle = "rgba(255,255,255,0.45)";
+  roundRectPath(ctx, x + 4, y + 3, w * 0.35, h * 0.28, 3);
+  ctx.fill();
+  // Motivo amigable (estrella simple, no ©)
+  ctx.fillStyle = "#fff3c0";
+  ctx.beginPath();
+  ctx.arc(x + w / 2, y + h / 2, Math.min(w, h) * 0.18, 0, Math.PI * 2);
+  ctx.fill();
+}
+
+export function drawPlatforms(
+  ctx: CanvasRenderingContext2D,
+  platforms: Platform[],
+  camera: Camera = { x: 0 },
+) {
+  for (const p of platforms) {
+    const x = p.x - camera.x;
+    const y = p.y;
+    if (x + p.w < -20 || x > 520) continue;
+    if (p.kind === "ground") drawGroundStrip(ctx, x, y, p.w, p.h);
+    else if (p.kind === "brick") drawBrick(ctx, x, y, p.w, p.h);
+    else if (p.kind === "grass") drawGrassPlatform(ctx, x, y, p.w, p.h);
+    else if (p.kind === "pipe") drawPipeBody(ctx, x, y, p.w, p.h);
+    else if (p.kind === "block") drawBlock(ctx, x, y, p.w, p.h);
+  }
+}
+
+export function drawLowObstacles(
+  ctx: CanvasRenderingContext2D,
+  lows: LowObstacle[],
+  camera: Camera = { x: 0 },
+) {
+  for (const low of lows) {
+    const x = low.x - camera.x;
+    if (low.kind === "pipe") drawPipeBody(ctx, x, low.y, low.w, low.h);
+    else drawBlock(ctx, x, low.y, low.w, low.h);
+  }
+}
+
+/** Bandera / meta (diseño original). */
+export function drawFlag(
+  ctx: CanvasRenderingContext2D,
+  flag: FlagGoal,
+  time: StageDrawTime = {},
+  camera: Camera = { x: 0 },
+) {
+  const t = time.now ?? 0;
+  const x = flag.x - camera.x;
+  const baseY = flag.y;
+  const topY = baseY - flag.h;
+
+  // Sombra
+  ctx.fillStyle = "rgba(40, 60, 30, 0.18)";
+  ctx.beginPath();
+  ctx.ellipse(x, baseY + 2, 14, 4, 0, 0, Math.PI * 2);
+  ctx.fill();
+
+  // Mástil
+  ctx.fillStyle = "#dfe6e0";
+  ctx.fillRect(x - 3, topY, 6, flag.h);
+  ctx.fillStyle = "#9aa69c";
+  ctx.fillRect(x + 1, topY, 2, flag.h);
+
+  // Bola
+  ctx.fillStyle = "#ffd166";
+  ctx.beginPath();
+  ctx.arc(x, topY, 6, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.strokeStyle = "#e09a2b";
+  ctx.lineWidth = 1.5;
+  ctx.stroke();
+
+  // Bandera ondeante
+  const wave = Math.sin(t / 220) * 4;
   ctx.fillStyle = "#ff6b6b";
   ctx.beginPath();
-  ctx.arc(wall.x + wall.w * 0.3, wall.y + wall.h * 0.35, 3, 0, Math.PI * 2);
-  ctx.arc(wall.x + wall.w * 0.7, wall.y + wall.h * 0.55, 2.5, 0, Math.PI * 2);
+  ctx.moveTo(x + 3, topY + 10);
+  ctx.quadraticCurveTo(x + 28 + wave, topY + 22, x + 3, topY + 36);
+  ctx.closePath();
   ctx.fill();
+  ctx.strokeStyle = "#c9184a";
+  ctx.lineWidth = 1.5;
+  ctx.stroke();
+  ctx.fillStyle = "#ffe066";
+  ctx.beginPath();
+  ctx.arc(x + 12 + wave * 0.3, topY + 22, 3, 0, Math.PI * 2);
+  ctx.fill();
+}
+
+/** Aki mirando izquierda/derecha (sin rotación de heading). */
+export function drawAkemiSprite(
+  ctx: CanvasRenderingContext2D,
+  st: PlayerState,
+  camera: Camera = { x: 0 },
+) {
+  const h = playerHeight(st);
+  const sx = st.x - camera.x;
+  const sy = st.y;
+
+  ctx.save();
+  ctx.translate(sx, sy);
+  ctx.scale(st.facing, 1);
+
+  // Sombra
+  ctx.fillStyle = "rgba(40, 60, 40, 0.22)";
+  ctx.beginPath();
+  ctx.ellipse(0, 2, 12, 4, 0, 0, Math.PI * 2);
+  ctx.fill();
+
+  const crouch = st.crouching;
+  const legY = crouch ? -8 : -12;
+  const bodyH = crouch ? 14 : 18;
+  const headY = crouch ? -h + 4 : -h + 2;
+
+  // Piernas
+  ctx.fillStyle = "#3a86ff";
+  roundRectPath(ctx, -10, legY, 8, crouch ? 8 : 12, 3);
+  ctx.fill();
+  roundRectPath(ctx, 2, legY, 8, crouch ? 8 : 12, 3);
+  ctx.fill();
+
+  // Zapatos
+  ctx.fillStyle = "#fb5607";
+  roundRectPath(ctx, -11, -2, 10, 5, 2);
+  ctx.fill();
+  roundRectPath(ctx, 1, -2, 10, 5, 2);
+  ctx.fill();
+
+  // Cuerpo
+  const shirt = ctx.createLinearGradient(-12, -bodyH - 4, 12, 0);
+  shirt.addColorStop(0, "#ff8fab");
+  shirt.addColorStop(1, "#ff5c8a");
+  ctx.fillStyle = shirt;
+  roundRectPath(ctx, -11, -bodyH - 2, 22, bodyH, 7);
+  ctx.fill();
+  ctx.strokeStyle = "#c9184a";
+  ctx.lineWidth = 1.5;
+  ctx.stroke();
+
+  // Brazos
+  ctx.fillStyle = "#ffcad4";
+  roundRectPath(ctx, -16, -bodyH + 2, 6, crouch ? 8 : 11, 3);
+  ctx.fill();
+  roundRectPath(ctx, 10, -bodyH + 2, 6, crouch ? 8 : 11, 3);
+  ctx.fill();
+
+  // Cabeza
+  const face = ctx.createRadialGradient(-2, headY + 8, 2, 0, headY + 10, 13);
+  face.addColorStop(0, "#ffe5ec");
+  face.addColorStop(1, "#ffb3c6");
+  ctx.fillStyle = face;
+  roundRectPath(ctx, -11, headY, 22, 22, 10);
+  ctx.fill();
+  ctx.strokeStyle = "#e85a7a";
+  ctx.lineWidth = 1.4;
+  ctx.stroke();
+
+  // Cabello
+  ctx.fillStyle = "#6d4c41";
+  ctx.beginPath();
+  ctx.ellipse(-2, headY + 2, 11, 5, -0.1, Math.PI, Math.PI * 2);
+  ctx.fill();
+
+  // Ojos
+  ctx.fillStyle = "#fff";
+  ctx.beginPath();
+  ctx.ellipse(-4, headY + 10, 3.4, 4, 0, 0, Math.PI * 2);
+  ctx.ellipse(4.5, headY + 10, 3.4, 4, 0, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.fillStyle = "#2b2d42";
+  ctx.beginPath();
+  ctx.arc(-3.2, headY + 10.5, 2, 0, Math.PI * 2);
+  ctx.arc(5.2, headY + 10.5, 2, 0, Math.PI * 2);
+  ctx.fill();
+
+  // Mejillas + sonrisa
+  ctx.fillStyle = "rgba(255, 120, 140, 0.4)";
+  ctx.beginPath();
+  ctx.ellipse(-8, headY + 15, 2.5, 1.6, 0, 0, Math.PI * 2);
+  ctx.ellipse(8, headY + 15, 2.5, 1.6, 0, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.strokeStyle = "#c9184a";
+  ctx.lineWidth = 1.5;
+  ctx.beginPath();
+  ctx.arc(0, headY + 15, 4, 0.2, Math.PI - 0.2);
+  ctx.stroke();
+
+  ctx.restore();
 }
 
 export type ConfettiPiece = {
@@ -587,7 +453,6 @@ export function drawConfetti(ctx: CanvasRenderingContext2D, pieces: ConfettiPiec
   }
 }
 
-/** Destellos / sparkles alrededor de un punto (p. ej. al ganar). */
 export function drawWinSparkles(
   ctx: CanvasRenderingContext2D,
   cx: number,
@@ -622,3 +487,12 @@ export function roundRect(
 ) {
   roundRectPath(ctx, x, y, w, h, r);
 }
+
+/** Compat stubs (ya no se usan muros/gemas del grid). */
+export function drawStageWalls(_ctx: CanvasRenderingContext2D, _walls: unknown[]) {}
+export function drawStageGoals(
+  _ctx: CanvasRenderingContext2D,
+  _goals: unknown[],
+  _collected: Set<string>,
+  _time?: StageDrawTime,
+) {}

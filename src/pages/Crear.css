@@ -480,3 +480,198 @@
   justify-content: center;
   gap: 0.5rem;
 }
+
+.crear-status-msg {
+  margin: 0.5rem 0 0;
+  text-align: center;
+  font-weight: 800;
+  color: #c45c26;
+}
+
+.crear-free-pill {
+  background: linear-gradient(180deg, #ffe08a, #f4a261);
+  border-color: #e76f51;
+}
+
+.crear-layout.is-free {
+  grid-template-columns: 1fr;
+  justify-items: center;
+}
+
+.crear-layout.is-free .crear-stage-wrap {
+  width: 100%;
+  max-width: 36rem;
+}
+
+.crear-free-bar {
+  display: flex;
+  gap: 0.5rem;
+  justify-content: center;
+  margin-bottom: 0.55rem;
+}
+
+.crear-gameboy {
+  margin-top: 0.85rem;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.45rem;
+}
+
+.crear-gb-shell {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1.5rem;
+  width: min(100%, 22rem);
+  padding: 1rem 1.15rem;
+  border-radius: 1.4rem;
+  background:
+    linear-gradient(160deg, #c5d4a1 0%, #9aaa6e 45%, #7d8f52 100%);
+  border: 4px solid #5c6b3a;
+  box-shadow:
+    inset 0 2px 0 rgba(255, 255, 255, 0.35),
+    0 10px 0 rgba(60, 70, 35, 0.25),
+    0 16px 28px rgba(11, 58, 74, 0.18);
+}
+
+.crear-gb-dpad {
+  position: relative;
+  width: 6.2rem;
+  height: 6.2rem;
+}
+
+.crear-gb-btn {
+  position: absolute;
+  width: 2rem;
+  height: 2rem;
+  border: none;
+  border-radius: 0.35rem;
+  background: #2b2d42;
+  box-shadow: 0 3px 0 #1a1b28;
+  cursor: pointer;
+  touch-action: none;
+}
+
+.crear-gb-btn:active {
+  transform: translateY(2px);
+  box-shadow: 0 1px 0 #1a1b28;
+}
+
+.crear-gb-up {
+  top: 0;
+  left: 50%;
+  transform: translateX(-50%);
+}
+
+.crear-gb-up:active {
+  transform: translateX(-50%) translateY(2px);
+}
+
+.crear-gb-down {
+  bottom: 0;
+  left: 50%;
+  transform: translateX(-50%);
+}
+
+.crear-gb-down:active {
+  transform: translateX(-50%) translateY(2px);
+}
+
+.crear-gb-left {
+  left: 0;
+  top: 50%;
+  transform: translateY(-50%);
+}
+
+.crear-gb-left:active {
+  transform: translateY(calc(-50% + 2px));
+}
+
+.crear-gb-right {
+  right: 0;
+  top: 50%;
+  transform: translateY(-50%);
+}
+
+.crear-gb-right:active {
+  transform: translateY(calc(-50% + 2px));
+}
+
+.crear-gb-pad-center {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 1.55rem;
+  height: 1.55rem;
+  transform: translate(-50%, -50%);
+  border-radius: 0.3rem;
+  background: #2b2d42;
+}
+
+.crear-gb-actions {
+  display: flex;
+  gap: 0.75rem;
+  align-items: flex-end;
+  padding-bottom: 0.35rem;
+}
+
+.crear-gb-ab {
+  width: 3.1rem;
+  height: 3.1rem;
+  border-radius: 50%;
+  border: none;
+  font-family: var(--font-display);
+  font-weight: 800;
+  font-size: 1.05rem;
+  color: #fff8e7;
+  cursor: pointer;
+  touch-action: none;
+  box-shadow: 0 4px 0 rgba(0, 0, 0, 0.28);
+}
+
+.crear-gb-ab:active {
+  transform: translateY(3px);
+  box-shadow: 0 1px 0 rgba(0, 0, 0, 0.28);
+}
+
+.crear-gb-a {
+  background: radial-gradient(circle at 35% 30%, #ff8fab, #e63956);
+  margin-bottom: 0.85rem;
+}
+
+.crear-gb-b {
+  background: radial-gradient(circle at 35% 30%, #ffd166, #e09a2b);
+}
+
+.crear-gb-hint {
+  margin: 0;
+  font-size: 0.78rem;
+  font-weight: 700;
+  opacity: 0.8;
+  text-align: center;
+  max-width: 22rem;
+}
+
+.crear-level-header {
+  background:
+    linear-gradient(180deg, rgba(255, 248, 220, 0.96), rgba(255, 214, 165, 0.9));
+}
+
+@media (max-width: 899px) {
+  .crear-gb-shell {
+    gap: 1rem;
+    padding: 0.85rem 1rem;
+  }
+}
+
+.crear-native .crear-gb-btn,
+.crear-native .crear-gb-ab {
+  min-width: 2.75rem;
+  min-height: 2.75rem;
+}
+
+.crear-native .crear-gb-ab {
+  width: 3.4rem;
+  height: 3.4rem;
+}

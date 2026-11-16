@@ -1,31 +1,52 @@
 import type { BlockKind, ProgramBlock } from "./blocks";
 import { createBlock } from "./blocks";
-import type { StageWall } from "./obstacles";
-import type { SpriteState } from "./runtime";
-
-export type GoalKind = "star" | "collect";
-
-export type StageGoal = {
-  id: string;
-  kind: GoalKind;
-  x: number;
-  y: number;
-};
+import type { FlagGoal, LowObstacle, Platform } from "./physics";
+import { STAGE_SIZE } from "./physics";
 
 export type CrearLevel = {
   id: string;
   title: string;
   mission: string;
   hint: string;
-  /** Bloques que aparecen en la paleta en este nivel. */
   allowedBlocks: BlockKind[];
-  start: Pick<SpriteState, "x" | "y" | "heading">;
-  goals: StageGoal[];
-  /** Muros u obstáculos que Aki debe esquivar. */
-  walls: StageWall[];
-  /** Plantilla opcional al abrir el nivel (sin valores personales). */
+  /** Posición inicial de Aki (pies sobre el suelo). */
+  start: { x: number; y: number; facing?: 1 | -1 };
+  platforms: Platform[];
+  lowObstacles: LowObstacle[];
+  flag: FlagGoal;
   starterBlocks?: BlockKind[];
 };
+
+const GROUND_Y = 280;
+const GROUND_H = STAGE_SIZE.height - GROUND_Y;
+
+function ground(x: number, w: number): Platform {
+  return { x, y: GROUND_Y, w, h: GROUND_H, kind: "ground" };
+}
+
+function grassPlat(x: number, y: number, w: number, h = 18): Platform {
+  return { x, y, w, h, kind: "grass" };
+}
+
+function brickPlat(x: number, y: number, w: number, h = 18): Platform {
+  return { x, y, w, h, kind: "brick" };
+}
+
+function pipe(x: number, y: number, w: number, h: number): Platform {
+  return { x, y, w, h, kind: "pipe" };
+}
+
+function lowPipe(x: number, y: number, w: number, h: number): LowObstacle {
+  return { x, y, w, h, kind: "pipe" };
+}
+
+function lowBlock(x: number, y: number, w: number, h: number): LowObstacle {
+  return { x, y, w, h, kind: "block" };
+}
+
+function flagAt(x: number, y = GROUND_Y, h = 88): FlagGoal {
+  return { x, y, h };
+}
 
 function lvl(
   id: string,
@@ -34,8 +55,9 @@ function lvl(
   hint: string,
   allowed: BlockKind[],
   start: CrearLevel["start"],
-  goals: StageGoal[],
-  walls: StageWall[] = [],
+  platforms: Platform[],
+  flag: FlagGoal,
+  lowObstacles: LowObstacle[] = [],
   starter?: BlockKind[],
 ): CrearLevel {
   return {
@@ -45,316 +67,238 @@ function lvl(
     hint,
     allowedBlocks: allowed,
     start,
-    goals,
-    walls,
+    platforms,
+    lowObstacles,
+    flag,
     starterBlocks: starter,
   };
 }
 
-/** Currículo progresivo estilo Hora del Código (texto en español). */
+/** 15 niveles progresivos estilo platformer (texto en español). */
 export const CREAR_CURRICULUM: CrearLevel[] = [
   lvl(
     "l01",
-    "Nivel 1 · Tu primer paso",
-    "Programa a Aki para que llegue a la estrella.",
-    "Toca «Avanzar» y pulsa Reproducir.",
-    ["move"],
-    { x: 72, y: 200, heading: 0 },
-    [{ id: "star-1", kind: "star", x: 252, y: 198 }],
+    "Nivel 1 · Camina a la meta",
+    "Programa a Aki para llegar a la bandera caminando.",
+    "Añade «Avanzar» y pulsa Reproducir.",
+    ["move_forward"],
+    { x: 48, y: GROUND_Y },
+    [ground(0, 480)],
+    flagAt(360),
     [],
-    ["move", "move", "move", "move"],
+    ["move_forward", "move_forward", "move_forward"],
   ),
   lvl(
     "l02",
-    "Nivel 2 · Más lejos",
-    "La estrella está más a la derecha. Usa varios bloques Avanzar.",
-    "Cada Avanzar son 40 pasos.",
-    ["move"],
-    { x: 56, y: 210, heading: 0 },
-    [{ id: "star-1", kind: "star", x: 290, y: 208 }],
+    "Nivel 2 · Un poco más lejos",
+    "La bandera está más a la derecha. Usa más pasos.",
+    "Sube el número de pasos en Avanzar.",
+    ["move_forward"],
+    { x: 40, y: GROUND_Y },
+    [ground(0, 480)],
+    flagAt(420),
     [],
-    ["move", "move", "move", "move"],
+    ["move_forward"],
   ),
   lvl(
     "l03",
-    "Nivel 3 · Gira a la derecha",
-    "Aki mira hacia arriba. Gira y avanza hasta la estrella.",
-    "Primero gira, luego avanza.",
-    ["move", "turn_right"],
-    { x: 180, y: 248, heading: 270 },
-    [{ id: "star-1", kind: "star", x: 182, y: 88 }],
+    "Nivel 3 · ¡Salta el hueco!",
+    "Hay un hueco. Salta y luego avanza hasta la bandera.",
+    "Avanzar → Saltar → Avanzar.",
+    ["move_forward", "jump"],
+    { x: 40, y: GROUND_Y },
+    [ground(0, 190), ground(240, 240)],
+    flagAt(420),
     [],
-    ["turn_right", "move", "move"],
+    ["move_forward", "jump", "move_forward"],
   ),
   lvl(
     "l04",
-    "Nivel 4 · Gira a la izquierda",
-    "Gira a la izquierda y llega a la meta.",
-    "¡Izquierda y derecha cambian hacia dónde miras!",
-    ["move", "turn_left", "turn_right"],
-    { x: 280, y: 100, heading: 180 },
-    [{ id: "star-1", kind: "star", x: 80, y: 98 }],
+    "Nivel 4 · Dos saltos",
+    "Dos huecos seguidos: salta dos veces en el camino.",
+    "Avanza, salta, avanza, salta, avanza.",
+    ["move_forward", "jump"],
+    { x: 36, y: GROUND_Y },
+    [ground(0, 130), ground(180, 100), ground(330, 150)],
+    flagAt(430),
     [],
-    ["turn_left", "move", "move", "move"],
+    ["move_forward", "jump", "move_forward", "jump", "move_forward"],
   ),
   lvl(
     "l05",
-    "Nivel 5 · Camino con esquina",
-    "Combina giros y avances como un camino en L.",
-    "Secuencia = orden de bloques.",
-    ["move", "turn_left", "turn_right"],
-    { x: 72, y: 240, heading: 0 },
-    [{ id: "star-1", kind: "star", x: 250, y: 110 }],
-    [],
-    ["move", "move", "turn_left", "move", "move"],
+    "Nivel 5 · Agáchate",
+    "Hay un tubo bajo. Agáchate y avanza por debajo.",
+    "Agacharse baja a Aki para pasar.",
+    ["move_forward", "crouch"],
+    { x: 40, y: GROUND_Y },
+    [ground(0, 480)],
+    flagAt(420),
+    [lowPipe(200, GROUND_Y - 50, 70, 24)],
+    ["move_forward", "crouch", "move_forward", "move_forward"],
   ),
   lvl(
     "l06",
-    "Nivel 6 · Saluda al llegar",
-    "Llega a la estrella y usa «Decir» para saludar.",
-    "Puedes decir antes o después de moverte.",
-    ["move", "turn_left", "turn_right", "say"],
-    { x: 70, y: 160, heading: 0 },
-    [{ id: "star-1", kind: "star", x: 268, y: 158 }],
-    [],
-    ["move", "move", "move", "say"],
+    "Nivel 6 · Salto y tubo",
+    "Salta el hueco y luego agáchate bajo el tubo.",
+    "Orden: avanzar, saltar, avanzar, agacharse, avanzar.",
+    ["move_forward", "jump", "crouch"],
+    { x: 36, y: GROUND_Y },
+    [ground(0, 170), ground(230, 250)],
+    flagAt(430),
+    [lowPipe(310, GROUND_Y - 50, 64, 24)],
+    ["move_forward", "jump", "move_forward", "crouch", "move_forward"],
   ),
   lvl(
     "l07",
-    "Nivel 7 · Espera un momento",
-    "Usa «Esperar» entre movimientos, como una pausa dramática.",
-    "La espera no mueve a Aki; da tiempo.",
-    ["move", "turn_left", "turn_right", "wait"],
-    { x: 90, y: 200, heading: 0 },
-    [{ id: "star-1", kind: "star", x: 240, y: 198 }],
+    "Nivel 7 · Plataforma alta",
+    "Sube a la plataforma de pasto con un salto y llega a la bandera.",
+    "Acércate y salta hacia la plataforma.",
+    ["move_forward", "jump"],
+    { x: 40, y: GROUND_Y },
+    [
+      ground(0, 180),
+      grassPlat(200, 220, 120),
+      ground(340, 140),
+    ],
+    flagAt(420),
     [],
-    ["move", "wait", "move", "wait", "move"],
+    ["move_forward", "jump", "move_forward", "jump", "move_forward"],
   ),
   lvl(
     "l08",
-    "Nivel 8 · Repetir dos veces",
-    "El bloque Repetir ejecuta los bloques de adentro varias veces.",
-    "Mete Avanzar dentro de Repetir.",
-    ["move", "turn_left", "turn_right", "repeat"],
-    { x: 60, y: 170, heading: 0 },
-    [{ id: "star-1", kind: "star", x: 280, y: 168 }],
+    "Nivel 8 · Retrocede un poco",
+    "Estás demasiado cerca del borde. Retrocede, luego salta.",
+    "Usa Retroceder antes de saltar.",
+    ["move_forward", "move_back", "jump"],
+    { x: 155, y: GROUND_Y },
+    [ground(0, 180), ground(235, 245)],
+    flagAt(420),
     [],
-    ["repeat"],
+    ["move_back", "jump", "move_forward", "move_forward"],
   ),
   lvl(
     "l09",
-    "Nivel 9 · Cuadrado pequeño",
-    "Repite: avanzar y girar para dibujar un cuadrado mental.",
-    "4 lados → repite 4 veces.",
-    ["move", "turn_left", "turn_right", "repeat"],
-    { x: 140, y: 200, heading: 0 },
-    [{ id: "star-1", kind: "star", x: 140, y: 72 }],
+    "Nivel 9 · Escalera de ladrillos",
+    "Sube tres escalones de ladrillo hasta la bandera.",
+    "Avanza y salta en cada escalón.",
+    ["move_forward", "jump"],
+    { x: 36, y: GROUND_Y },
+    [
+      ground(0, 100),
+      brickPlat(110, 240, 70),
+      brickPlat(200, 200, 70),
+      brickPlat(290, 160, 90),
+      ground(390, 90),
+    ],
+    flagAt(430, GROUND_Y, 88),
     [],
-    ["repeat"],
+    ["move_forward", "jump", "move_forward", "jump", "move_forward", "jump", "move_forward"],
   ),
   lvl(
     "l10",
-    "Nivel 10 · Recoge la gema",
-    "Toca la gema morada para recolectarla.",
-    "La meta es la gema, no la estrella.",
-    ["move", "turn_left", "turn_right"],
-    { x: 80, y: 180, heading: 0 },
-    [{ id: "gem-1", kind: "collect", x: 260, y: 178 }],
+    "Nivel 10 · Tubo alto y hueco",
+    "Salta sobre el tubo y cruza el hueco hacia la bandera.",
+    "El tubo es una plataforma: súbete y salta.",
+    ["move_forward", "jump", "crouch"],
+    { x: 40, y: GROUND_Y },
+    [
+      ground(0, 140),
+      pipe(150, GROUND_Y - 56, 44, 56),
+      ground(280, 200),
+    ],
+    flagAt(430),
     [],
-    ["move", "move", "move"],
+    ["move_forward", "jump", "move_forward", "jump", "move_forward"],
   ),
   lvl(
     "l11",
-    "Nivel 11 · Dos gemas",
-    "Recoge las dos gemas. Puedes usar Repetir si quieres.",
-    "Visita cada gema con avances y giros.",
-    ["move", "turn_left", "turn_right", "repeat"],
-    { x: 70, y: 220, heading: 0 },
+    "Nivel 11 · Repite saltos",
+    "Usa Repetir para saltar varios huecos iguales.",
+    "Mete Avanzar y Saltar dentro de Repetir.",
+    ["move_forward", "jump", "repeat"],
+    { x: 32, y: GROUND_Y },
     [
-      { id: "gem-1", kind: "collect", x: 120, y: 90 },
-      { id: "gem-2", kind: "collect", x: 280, y: 90 },
+      ground(0, 100),
+      ground(150, 80),
+      ground(280, 80),
+      ground(410, 70),
     ],
-  ),
-  lvl(
-    "l12",
-    "Nivel 12 · Estrella lejana",
-    "Usa todo: decir, esperar y repetir para la estrella final.",
-    "¡Tú mandas el orden de los bloques!",
-    ["move", "turn_left", "turn_right", "wait", "say", "repeat"],
-    { x: 50, y: 250, heading: 0 },
-    [{ id: "star-1", kind: "star", x: 300, y: 80 }],
-    [{ x: 170, y: 140, w: 24, h: 120 }],
-  ),
-  lvl(
-    "l13",
-    "Nivel 13 · Tres gemas en fila",
-    "Tres gemas en línea: repetir avanzar ayuda.",
-    "Repetir 3 veces con Avanzar adentro.",
-    ["move", "turn_left", "turn_right", "repeat"],
-    { x: 60, y: 160, heading: 0 },
-    [
-      { id: "gem-1", kind: "collect", x: 140, y: 158 },
-      { id: "gem-2", kind: "collect", x: 210, y: 158 },
-      { id: "gem-3", kind: "collect", x: 280, y: 158 },
-    ],
-  ),
-  lvl(
-    "l14",
-    "Nivel 14 · Di el camino",
-    "Di algo en el camino y termina en la estrella.",
-    "Decir muestra una burbuja y habla.",
-    ["move", "turn_left", "turn_right", "say", "wait"],
-    { x: 180, y: 260, heading: 270 },
-    [{ id: "star-1", kind: "star", x: 180, y: 70 }],
+    flagAt(450),
     [],
-    ["say", "turn_right", "move", "move", "move"],
-  ),
-  lvl(
-    "l15",
-    "Nivel 15 · Explorador con muros",
-    "Esquiva el muro central y llega a la estrella.",
-    "Gira para rodear la pared.",
-    ["move", "turn_left", "turn_right", "wait", "say", "repeat"],
-    { x: 55, y: 230, heading: 0 },
-    [{ id: "star-1", kind: "star", x: 290, y: 90 }],
-    [
-      { x: 150, y: 80, w: 28, h: 180 },
-      { x: 220, y: 120, w: 90, h: 24 },
-    ],
-  ),
-  lvl(
-    "l16",
-    "Nivel 16 · Tu primer muro",
-    "Hay una pared en medio: rodea y toca la estrella.",
-    "Avanza, gira y avanza otra vez.",
-    ["move", "turn_left", "turn_right", "repeat"],
-    { x: 60, y: 160, heading: 0 },
-    [{ id: "star-1", kind: "star", x: 280, y: 158 }],
-    [{ x: 165, y: 100, w: 30, h: 120 }],
-    ["move", "move", "turn_left", "move", "move"],
-  ),
-  lvl(
-    "l17",
-    "Nivel 17 · Pasillo",
-    "Recorre el pasillo entre dos paredes hasta la gema.",
-    "Gira al llegar al final del pasillo.",
-    ["move", "turn_left", "turn_right", "repeat"],
-    { x: 70, y: 240, heading: 270 },
-    [{ id: "gem-1", kind: "collect", x: 280, y: 80 }],
-    [
-      { x: 100, y: 60, w: 160, h: 22 },
-      { x: 100, y: 200, w: 160, h: 22 },
-    ],
-  ),
-  lvl(
-    "l18",
-    "Nivel 18 · Repetir y rodear",
-    "Usa Repetir para rodear el bloque central.",
-    "Mete avanzar y girar dentro del repetir.",
-    ["move", "turn_left", "turn_right", "repeat"],
-    { x: 80, y: 260, heading: 270 },
-    [{ id: "star-1", kind: "star", x: 80, y: 70 }],
-    [{ x: 130, y: 110, w: 100, h: 100 }],
     ["repeat"],
   ),
   lvl(
-    "l19",
-    "Nivel 19 · Bucles anidados",
-    "Un repetir dentro de otro: patrón paso a paso.",
-    "En el repetir grande, pon otro repetir con movimientos.",
-    ["move", "turn_left", "turn_right", "repeat"],
-    { x: 60, y: 160, heading: 0 },
+    "l12",
+    "Nivel 12 · Pasadizo secreto",
+    "Agáchate bajo dos bloques y salta el hueco final.",
+    "Agacharse dos veces o avanzar agachado con cuidado.",
+    ["move_forward", "jump", "crouch", "repeat"],
+    { x: 36, y: GROUND_Y },
+    [ground(0, 340), ground(400, 80)],
+    flagAt(450),
     [
-      { id: "gem-1", kind: "collect", x: 140, y: 158 },
-      { id: "gem-2", kind: "collect", x: 220, y: 158 },
-      { id: "gem-3", kind: "collect", x: 300, y: 158 },
+      lowBlock(140, GROUND_Y - 50, 56, 24),
+      lowBlock(240, GROUND_Y - 50, 56, 24),
     ],
-    [{ x: 95, y: 200, w: 200, h: 20 }],
+    ["move_forward", "crouch", "move_forward", "crouch", "move_forward", "jump", "move_forward"],
   ),
   lvl(
-    "l20",
-    "Nivel 20 · Laberinto suave",
-    "Tres gemas entre paredes: planifica la ruta.",
-    "Combina giros y repeticiones.",
-    ["move", "turn_left", "turn_right", "wait", "repeat"],
-    { x: 55, y: 55, heading: 90 },
+    "l13",
+    "Nivel 13 · Islas flotantes",
+    "Salta de isla en isla hasta la bandera del cielo.",
+    "No te caigas: avanza poco y salta.",
+    ["move_forward", "move_back", "jump"],
+    { x: 40, y: GROUND_Y },
     [
-      { id: "gem-1", kind: "collect", x: 300, y: 55 },
-      { id: "gem-2", kind: "collect", x: 300, y: 160 },
-      { id: "gem-3", kind: "collect", x: 300, y: 265 },
+      ground(0, 100),
+      grassPlat(140, 230, 80),
+      grassPlat(250, 190, 80),
+      brickPlat(360, 150, 100),
     ],
-    [
-      { x: 140, y: 40, w: 24, h: 240 },
-      { x: 220, y: 80, w: 24, h: 200 },
-    ],
+    flagAt(430, 150, 70),
+    [],
+    ["move_forward", "jump", "move_forward", "jump", "move_forward", "jump", "move_forward"],
   ),
   lvl(
-    "l21",
-    "Nivel 21 · Si hay pared",
-    "Nuevo bloque: «Si hay pared» gira solo cuando el camino está bloqueado.",
-    "Mete Girar izquierda dentro de Si hay pared.",
-    ["move", "turn_left", "turn_right", "repeat", "if_blocked"],
-    { x: 60, y: 160, heading: 0 },
-    [{ id: "star-1", kind: "star", x: 300, y: 160 }],
+    "l14",
+    "Nivel 14 · Zigzag",
+    "Retrocede para tomar impulso, salta, agáchate y termina.",
+    "Combina los cuatro movimientos.",
+    ["move_forward", "move_back", "jump", "crouch", "wait"],
+    { x: 200, y: GROUND_Y },
     [
-      { x: 120, y: 60, w: 28, h: 200 },
-      { x: 200, y: 60, w: 28, h: 200 },
+      ground(0, 175),
+      ground(235, 110),
+      ground(400, 80),
+      pipe(90, GROUND_Y - 48, 40, 48),
     ],
-    ["move", "if_blocked"],
+    flagAt(450),
+    [lowPipe(310, GROUND_Y - 50, 60, 24)],
+    ["move_back", "jump", "move_forward", "jump", "crouch", "move_forward"],
   ),
   lvl(
-    "l22",
-    "Nivel 22 · Condición y gema",
-    "Usa Si hay pared para rodear y recoge la gema.",
-    "Repite mover + si hay pared + girar.",
-    ["move", "turn_left", "turn_right", "repeat", "if_blocked"],
-    { x: 70, y: 240, heading: 270 },
-    [{ id: "gem-1", kind: "collect", x: 180, y: 70 }],
+    "l15",
+    "Nivel 15 · Gran aventura",
+    "El reto final: huecos, tubos y plataformas. ¡Llega a la bandera!",
+    "Planifica bien. Al completar los 15 desbloqueas el juego libre.",
+    ["move_forward", "move_back", "jump", "crouch", "wait", "say", "repeat"],
+    { x: 32, y: GROUND_Y },
     [
-      { x: 150, y: 100, w: 90, h: 28 },
-      { x: 150, y: 170, w: 90, h: 28 },
+      ground(0, 110),
+      brickPlat(125, 240, 70),
+      ground(220, 80),
+      pipe(310, GROUND_Y - 52, 42, 52),
+      grassPlat(370, 200, 55),
+      ground(430, 50),
     ],
-  ),
-  lvl(
-    "l23",
-    "Nivel 23 · Rutina completa",
-    "Gemas y estrella con obstáculos: todo lo aprendido.",
-    "Anida repeticiones si te ayuda.",
-    ["move", "turn_left", "turn_right", "wait", "say", "repeat", "if_blocked"],
-    { x: 50, y: 160, heading: 0 },
-    [
-      { id: "gem-1", kind: "collect", x: 120, y: 80 },
-      { id: "gem-2", kind: "collect", x: 120, y: 240 },
-      { id: "star-1", kind: "star", x: 300, y: 160 },
-    ],
-    [
-      { x: 160, y: 110, w: 30, h: 100 },
-      { x: 230, y: 50, w: 80, h: 28 },
-      { x: 230, y: 240, w: 80, h: 28 },
-    ],
-  ),
-  lvl(
-    "l24",
-    "Nivel 24 · Maestro programador",
-    "Último desafío: cuatro gemas y la meta final.",
-    "¡Eres un crack de los bloques!",
-    ["move", "turn_left", "turn_right", "wait", "say", "repeat", "if_blocked"],
-    { x: 55, y: 280, heading: 270 },
-    [
-      { id: "gem-1", kind: "collect", x: 80, y: 80 },
-      { id: "gem-2", kind: "collect", x: 180, y: 80 },
-      { id: "gem-3", kind: "collect", x: 280, y: 80 },
-      { id: "star-1", kind: "star", x: 300, y: 260 },
-    ],
-    [
-      { x: 120, y: 120, w: 24, h: 140 },
-      { x: 200, y: 120, w: 24, h: 140 },
-      { x: 120, y: 200, w: 104, h: 24 },
-    ],
+    flagAt(460),
+    [lowBlock(235, GROUND_Y - 50, 48, 24)],
+    ["move_forward", "jump", "move_forward", "crouch", "move_forward", "jump", "move_forward", "jump", "move_forward"],
   ),
 ];
 
 export const FIRST_LEVEL_ID = CREAR_CURRICULUM[0].id;
+export const TOTAL_CREAR_LEVELS = CREAR_CURRICULUM.length;
 
 export function levelById(id: string): CrearLevel | undefined {
   return CREAR_CURRICULUM.find((l) => l.id === id);
@@ -366,6 +310,40 @@ export function nextLevelId(currentId: string): string | null {
   return CREAR_CURRICULUM[i + 1].id;
 }
 
+export function allLevelsComplete(completedIds: string[]): boolean {
+  return CREAR_CURRICULUM.every((l) => completedIds.includes(l.id));
+}
+
+/** Mundo libre tras desbloquear (escenario amplio para jugar a mano). */
+export const FREE_PLAY_LEVEL: CrearLevel = {
+  id: "free",
+  title: "Modo libre",
+  mission: "¡Juega tú mism@ con el control Game Boy!",
+  hint: "D-pad para mover · A saltar · B agacharse",
+  allowedBlocks: [],
+  start: { x: 60, y: GROUND_Y },
+  platforms: [
+    ground(0, 160),
+    ground(220, 100),
+    ground(380, 200),
+    brickPlat(170, 220, 80),
+    grassPlat(300, 180, 70),
+    pipe(420, GROUND_Y - 60, 48, 60),
+    brickPlat(500, 240, 90),
+    ground(560, 200),
+    grassPlat(700, 200, 80),
+    ground(800, 200),
+  ],
+  lowObstacles: [
+    lowPipe(250, GROUND_Y - 50, 55, 24),
+    lowBlock(620, GROUND_Y - 50, 50, 24),
+  ],
+  flag: flagAt(920, GROUND_Y, 96),
+};
+
+/** Escenario más ancho solo en modo libre (cámara sigue a Aki). */
+export const FREE_PLAY_WORLD_WIDTH = 1000;
+
 export function buildStarterBlocks(level: CrearLevel): ProgramBlock[] {
   const start: ProgramBlock = { id: "lvl-start", kind: "event_start" };
   if (!level.starterBlocks?.length) return [start];
@@ -373,12 +351,20 @@ export function buildStarterBlocks(level: CrearLevel): ProgramBlock[] {
     const b = createBlock(kind);
     if (kind === "repeat") {
       b.value = 3;
-      b.children = [createBlock("move")];
+      b.children = [createBlock("move_forward"), createBlock("jump")];
     }
-    if (kind === "if_blocked") {
-      b.children = [createBlock("turn_left")];
-    }
+    if (kind === "move_forward") b.value = 3;
+    if (kind === "move_back") b.value = 1;
     return b;
   });
   return [start, ...body];
+}
+
+export function worldFromLevel(level: CrearLevel, worldWidth = STAGE_SIZE.width) {
+  return {
+    platforms: level.platforms,
+    lowObstacles: level.lowObstacles,
+    width: worldWidth,
+    height: STAGE_SIZE.height,
+  };
 }
