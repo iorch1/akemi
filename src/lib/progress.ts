@@ -1,13 +1,13 @@
 import {
   ALL_IMAGE_IDS,
   COLORING_PACKS,
-  MATH_IMAGE_BY_LEVEL,
+  MATH_PACK_BY_LEVEL,
   READING_PACK_BY_LEVEL,
   STARTER_IMAGE_IDS,
+  SUPER_PACK_IDS,
   packById,
 } from "./coloring-packs";
-
-const STORAGE_KEY = "akemi-progress-v2";
+import { activeProfile, loadProfiles, progressKey } from "./profiles";
 
 export type ReadingLevelId = "letras" | "silabas" | "palabras" | "frases";
 
@@ -65,9 +65,18 @@ function normalize(raw: Partial<ProgressState> | null): ProgressState {
   };
 }
 
+function currentProgressKey(): string | null {
+  const store = loadProfiles();
+  const profile = activeProfile(store);
+  if (!profile) return null;
+  return progressKey(profile.id);
+}
+
 export function loadProgress(): ProgressState {
+  const key = currentProgressKey();
+  if (!key) return defaultProgress();
   try {
-    const s = localStorage.getItem(STORAGE_KEY);
+    const s = localStorage.getItem(key);
     if (!s) return defaultProgress();
     return normalize(JSON.parse(s) as Partial<ProgressState>);
   } catch {
@@ -76,7 +85,9 @@ export function loadProgress(): ProgressState {
 }
 
 export function saveProgress(state: ProgressState): void {
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+  const key = currentProgressKey();
+  if (!key) return;
+  localStorage.setItem(key, JSON.stringify(state));
 }
 
 function unlockPackImages(state: ProgressState, packId: string): ProgressState {
@@ -84,12 +95,6 @@ function unlockPackImages(state: ProgressState, packId: string): ProgressState {
   if (!pack) return state;
   const set = new Set(state.unlockedImages);
   for (const img of pack.images) set.add(img.id);
-  return { ...state, unlockedImages: ALL_IMAGE_IDS.filter((id) => set.has(id)) };
-}
-
-function unlockImage(state: ProgressState, imageId: string): ProgressState {
-  const set = new Set(state.unlockedImages);
-  set.add(imageId);
   return { ...state, unlockedImages: ALL_IMAGE_IDS.filter((id) => set.has(id)) };
 }
 
@@ -126,15 +131,15 @@ export function completeReadingChallenge(
 
 export type MathAnswerResult = {
   state: ProgressState;
-  unlockedImage: string | null;
+  unlockedPack: string | null;
   superPackUnlocked: boolean;
   levelAdvanced: boolean;
   streakReset: boolean;
 };
 
-/** Respuesta correcta en matemáticas: +1 racha; al llegar a 5, recompensa y sube nivel. */
+/** Respuesta correcta en matemáticas: +1 racha; al llegar a 5, recompensa libro y sube nivel. */
 export function mathCorrect(state: ProgressState): MathAnswerResult {
-  let unlockedImage: string | null = null;
+  let unlockedPack: string | null = null;
   let superPackUnlocked = false;
   let levelAdvanced = false;
 
@@ -144,10 +149,10 @@ export function mathCorrect(state: ProgressState): MathAnswerResult {
   if (streak >= 5) {
     const lvl = next.math.level;
     if (!next.math.rewardedLevels.includes(lvl)) {
-      const img = MATH_IMAGE_BY_LEVEL[lvl];
-      if (img) {
-        next = unlockImage(next, img);
-        unlockedImage = img;
+      const packId = MATH_PACK_BY_LEVEL[lvl];
+      if (packId) {
+        next = unlockPackImages(next, packId);
+        unlockedPack = packId;
       }
       next = {
         ...next,
@@ -164,15 +169,18 @@ export function mathCorrect(state: ProgressState): MathAnswerResult {
     };
     levelAdvanced = true;
     if (newLevel >= 6 && !next.math.superPackUnlocked) {
-      next = unlockPackImages(next, "pack-super");
+      for (const pid of SUPER_PACK_IDS) {
+        next = unlockPackImages(next, pid);
+      }
       next = { ...next, math: { ...next.math, superPackUnlocked: true } };
       superPackUnlocked = true;
+      unlockedPack = unlockedPack ?? "libro-11";
     }
   }
 
   return {
     state: next,
-    unlockedImage,
+    unlockedPack,
     superPackUnlocked,
     levelAdvanced,
     streakReset: false,
@@ -183,7 +191,7 @@ export function mathCorrect(state: ProgressState): MathAnswerResult {
 export function mathWrong(state: ProgressState): MathAnswerResult {
   return {
     state: { ...state, math: { ...state.math, streak: 0 } },
-    unlockedImage: null,
+    unlockedPack: null,
     superPackUnlocked: false,
     levelAdvanced: false,
     streakReset: true,
@@ -221,7 +229,7 @@ export function nextUnlockSummary(state: ProgressState): {
     if (packId && !isPackFullyUnlocked(state, packId)) {
       const done = state.reading[lvl].done.length;
       return {
-        title: "Siguiente pack (lectura)",
+        title: "Siguiente libro (lectura)",
         detail: packById(packId)?.name ?? "",
         progress: Math.min(3, done),
         target: 3,
@@ -231,13 +239,12 @@ export function nextUnlockSummary(state: ProgressState): {
 
   const m = state.math;
   if (m.level <= 5) {
-    const img = MATH_IMAGE_BY_LEVEL[m.level];
+    const packId = MATH_PACK_BY_LEVEL[m.level];
     const hasReward = m.rewardedLevels.includes(m.level);
+    const packName = packId ? packById(packId)?.name : "Libro";
     return {
-      title: hasReward ? `Nivel ${m.level} (sin nuevo dibujo)` : `Nivel ${m.level} matemáticas`,
-      detail: hasReward
-        ? "Completa 5 seguidos para avanzar"
-        : (imageByIdSafe(img)?.label ?? "Nuevo dibujo"),
+      title: hasReward ? `Nivel ${m.level} (sin libro nuevo)` : `Nivel ${m.level} matemáticas`,
+      detail: hasReward ? "Completa 5 seguidos para avanzar" : (packName ?? "Nuevo libro"),
       progress: m.streak,
       target: 5,
     };
@@ -245,7 +252,7 @@ export function nextUnlockSummary(state: ProgressState): {
 
   if (!m.superPackUnlocked) {
     return {
-      title: "Pack Super guerreras",
+      title: "Libros especiales",
       detail: "Supera el nivel 5 en mates",
       progress: m.level >= 6 ? 1 : 0,
       target: 1,
@@ -256,7 +263,7 @@ export function nextUnlockSummary(state: ProgressState): {
   if (locked.length === 0) {
     return {
       title: "¡Todo desbloqueado!",
-      detail: "Colorea todos los dibujos",
+      detail: "Colorea todas las páginas",
       progress: totalImages(),
       target: totalImages(),
     };
@@ -269,25 +276,18 @@ export function nextUnlockSummary(state: ProgressState): {
   };
 }
 
-function imageByIdSafe(id: string | undefined) {
-  if (!id) return undefined;
-  for (const p of COLORING_PACKS) {
-    const img = p.images.find((i) => i.id === id);
-    if (img) return img;
-  }
-  return undefined;
-}
-
 export function subscribeProgress(onChange: () => void): () => void {
   const handler = (e: StorageEvent) => {
-    if (e.key === STORAGE_KEY) onChange();
+    if (e.key?.startsWith("akemi-progress-v3-") || e.key === "akemi-profiles-v1") onChange();
   };
   window.addEventListener("storage", handler);
   const custom = () => onChange();
   window.addEventListener("akemi-progress", custom);
+  window.addEventListener("akemi-profiles", custom);
   return () => {
     window.removeEventListener("storage", handler);
     window.removeEventListener("akemi-progress", custom);
+    window.removeEventListener("akemi-profiles", custom);
   };
 }
 

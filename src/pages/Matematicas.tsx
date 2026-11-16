@@ -1,7 +1,9 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { BackButton } from "../components/BackButton";
+import { useProfileContext } from "../context/ProfileContext";
 import { useProgress } from "../hooks/useProgress";
-import { imageById, MATH_IMAGE_BY_LEVEL } from "../lib/coloring-packs";
+import { difficultyForAge, difficultyLabel, type DifficultyId } from "../lib/difficulty";
+import { MATH_PACK_BY_LEVEL, packById } from "../lib/coloring-packs";
 import { mathCorrect, mathWrong } from "../lib/progress";
 import { speak } from "../utils/speech";
 import "./Matematicas.css";
@@ -22,8 +24,8 @@ function rand(min: number, max: number) {
 
 function maxFor(diff: Difficulty) {
   if (diff === "facil") return 5;
-  if (diff === "medio") return 10;
-  return 20;
+  if (diff === "medio") return 12;
+  return 25;
 }
 
 function makeProblem(op: Op, diff: Difficulty) {
@@ -49,9 +51,11 @@ function makeProblem(op: Op, diff: Difficulty) {
 }
 
 export function Matematicas() {
+  const { profile } = useProfileContext();
+  const profileDiff: Difficulty = profile ? difficultyForAge(profile.edad) : "facil";
   const [progress, setProgress] = useProgress();
   const [op, setOp] = useState<Op>("sumar");
-  const [diff, setDiff] = useState<Difficulty>("facil");
+  const [diff, setDiff] = useState<Difficulty>(profileDiff);
   const [seed, setSeed] = useState(0);
   const [input, setInput] = useState("");
   const [feedback, setFeedback] = useState("");
@@ -61,10 +65,14 @@ export function Matematicas() {
   const symbol = OPS.find((o) => o.id === op)!.symbol;
   const { level, streak, rewardedLevels } = progress.math;
 
+  useEffect(() => {
+    setDiff(profileDiff);
+  }, [profileDiff]);
+
   const rewardLabel = useMemo(() => {
-    if (level > 5) return "Pack Super guerreras Akemi";
-    const id = MATH_IMAGE_BY_LEVEL[level];
-    return id ? imageById(id)?.label : undefined;
+    if (level > 5) return "Libros 11 y 12";
+    const packId = MATH_PACK_BY_LEVEL[level];
+    return packId ? packById(packId)?.name : undefined;
   }, [level]);
 
   function next() {
@@ -91,12 +99,12 @@ export function Matematicas() {
       setProgress(result.state);
       speak("¡Correcto!", { mode: "feedback" });
 
-      if (result.unlockedImage) {
-        const label = imageById(result.unlockedImage)?.label ?? "dibujo";
-        setToast(`¡Nuevo dibujo: ${label}!`);
+      if (result.unlockedPack) {
+        const label = packById(result.unlockedPack)?.name ?? "libro";
+        setToast(`¡Nuevo libro desbloqueado: ${label}!`);
       } else if (result.superPackUnlocked) {
-        setToast("¡Pack Super guerreras Akemi desbloqueado!");
-        speak("¡Pack desbloqueado!", { mode: "feedback" });
+        setToast("¡Libros 11 y 12 desbloqueados!");
+        speak("¡Libros desbloqueados!", { mode: "feedback" });
       } else if (result.levelAdvanced) {
         setToast(`¡Nivel ${result.state.math.level}! Sigue la racha.`);
       }
@@ -121,7 +129,7 @@ export function Matematicas() {
       <div className="panel">
         <h1 className="section-title">Matemáticas</h1>
         <p className="section-sub">
-          Nivel {level}: 5 aciertos seguidos para avanzar y desbloquear arte
+          Nivel {level}: 5 aciertos seguidos para desbloquear un libro · Dificultad: {difficultyLabel(diff as DifficultyId)}
         </p>
 
         <div className="mates-progress" aria-label="Progreso del nivel">
@@ -132,8 +140,8 @@ export function Matematicas() {
           {rewardLabel && (
             <p className="mates-reward-hint">
               {alreadyRewarded && level <= 5
-                ? "Ya tienes el dibujo de este nivel; avanza sin duplicado."
-                : `Próximo dibujo: ${rewardLabel}`}
+                ? "Ya tienes el libro de este nivel; avanza sin duplicado."
+                : `Próximo libro: ${rewardLabel}`}
             </p>
           )}
           <ul className="mates-streak-dots">
@@ -159,27 +167,7 @@ export function Matematicas() {
           ))}
         </div>
 
-        <div className="level-pills">
-          {(
-            [
-              ["facil", "Fácil"],
-              ["medio", "Medio"],
-              ["dificil", "Difícil"],
-            ] as const
-          ).map(([id, label]) => (
-            <button
-              key={id}
-              type="button"
-              className={`level-pill ${diff === id ? "active" : ""}`}
-              onClick={() => {
-                setDiff(id);
-                next();
-              }}
-            >
-              {label}
-            </button>
-          ))}
-        </div>
+        <p className="mates-diff-note">La dificultad sigue la edad de tu perfil (ajuste automático).</p>
 
         <div className="mates-board">
           <div className="mates-visual" aria-hidden>

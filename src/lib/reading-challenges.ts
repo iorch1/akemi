@@ -1,3 +1,4 @@
+import type { DifficultyId } from "./difficulty";
 import type { ReadingLevelId } from "./progress";
 
 export type ReadingChallenge = {
@@ -39,7 +40,71 @@ const CHALLENGES: Record<ReadingLevelId, ReadingChallenge[]> = {
   ],
 };
 
-export function challengesFor(level: ReadingLevelId): ReadingChallenge[] {
+const CHALLENGES_MEDIO: Record<ReadingLevelId, ReadingChallenge[]> = {
+  letras: [
+    { index: 0, prompt: "La letra de «zorro»", correct: "Z" },
+    { index: 1, prompt: "La letra de «jirafa»", correct: "J" },
+    { index: 2, prompt: "La letra de «ñandú»", correct: "Ñ" },
+    { index: 3, prompt: "La letra de «tren»", correct: "T" },
+    { index: 4, prompt: "La letra de «queso»", correct: "Q" },
+  ],
+  silabas: [
+    { index: 0, prompt: "Sílaba «bra»", correct: "bra" },
+    { index: 1, prompt: "Sílaba «tri»", correct: "tri" },
+    { index: 2, prompt: "Sílaba «gro»", correct: "gro" },
+    { index: 3, prompt: "Sílaba «clu»", correct: "clu" },
+    { index: 4, prompt: "Sílaba «pre»", correct: "pre" },
+  ],
+  palabras: [
+    { index: 0, prompt: "Felino doméstico", correct: "gato" },
+    { index: 1, prompt: "Ave que vuela de noche", correct: "búho" },
+    { index: 2, prompt: "Lugar para estudiar", correct: "escuela" },
+    { index: 3, prompt: "Fruta amarilla", correct: "plátano" },
+    { index: 4, prompt: "Medio de transporte", correct: "tren" },
+  ],
+  frases: [
+    { index: 0, prompt: "Frase con escuela", correct: "Voy a la escuela" },
+    { index: 1, prompt: "Frase con mar", correct: "Juego en el mar" },
+    { index: 2, prompt: "Frase con libro", correct: "Leo un libro rojo" },
+    { index: 3, prompt: "Frase con amigo", correct: "Mi amigo corre" },
+    { index: 4, prompt: "Frase con lluvia", correct: "Llueve en abril" },
+  ],
+};
+
+const CHALLENGES_DIFICIL: Record<ReadingLevelId, ReadingChallenge[]> = {
+  letras: [
+    { index: 0, prompt: "Primera de «xilófono»", correct: "X" },
+    { index: 1, prompt: "Primera de «hierba»", correct: "H" },
+    { index: 2, prompt: "Primera de «waffle»", correct: "W" },
+    { index: 3, prompt: "Primera de «yogur»", correct: "Y" },
+    { index: 4, prompt: "Primera de «zapato»", correct: "Z" },
+  ],
+  silabas: [
+    { index: 0, prompt: "Sílaba «cris»", correct: "cris" },
+    { index: 1, prompt: "Sílaba «plu»", correct: "plu" },
+    { index: 2, prompt: "Sílaba «tro»", correct: "tro" },
+    { index: 3, prompt: "Sílaba «fre»", correct: "fre" },
+    { index: 4, prompt: "Sílaba «gri»", correct: "gri" },
+  ],
+  palabras: [
+    { index: 0, prompt: "Animal acuático grande", correct: "ballena" },
+    { index: 1, prompt: "Instrumento de cuerda", correct: "guitarra" },
+    { index: 2, prompt: "Planeta rojo", correct: "marte" },
+    { index: 3, prompt: "Profesional de salud", correct: "médico" },
+    { index: 4, prompt: "Edificio con libros", correct: "biblioteca" },
+  ],
+  frases: [
+    { index: 0, prompt: "Frase más larga", correct: "El tren llega muy tarde" },
+    { index: 1, prompt: "Frase con dos verbos", correct: "Leo y escribo cartas" },
+    { index: 2, prompt: "Frase con lugar", correct: "Nadamos en la piscina" },
+    { index: 3, prompt: "Frase con clima", correct: "Hace frío en invierno" },
+    { index: 4, prompt: "Frase con familia", correct: "Mi hermana canta bien" },
+  ],
+};
+
+export function challengesFor(level: ReadingLevelId, difficulty: DifficultyId = "facil"): ReadingChallenge[] {
+  if (difficulty === "dificil") return CHALLENGES_DIFICIL[level];
+  if (difficulty === "medio") return CHALLENGES_MEDIO[level];
   return CHALLENGES[level];
 }
 

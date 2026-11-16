@@ -1,6 +1,8 @@
 import { useEffect, useMemo, useState } from "react";
 import { BackButton } from "../components/BackButton";
+import { useProfileContext } from "../context/ProfileContext";
 import { useProgress } from "../hooks/useProgress";
+import { difficultyForAge, difficultyLabel } from "../lib/difficulty";
 import { packById, READING_PACK_BY_LEVEL } from "../lib/coloring-packs";
 import { completeReadingChallenge, type ReadingLevelId } from "../lib/progress";
 import { challengesFor, distractorsFor } from "../lib/reading-challenges";
@@ -15,13 +17,15 @@ const LEVELS: { id: ReadingLevelId; label: string }[] = [
 ];
 
 export function Leer() {
+  const { profile } = useProfileContext();
+  const difficulty = profile ? difficultyForAge(profile.edad) : "facil";
   const [progress, setProgress] = useProgress();
   const [level, setLevel] = useState<ReadingLevelId>("letras");
   const [challengeSlot, setChallengeSlot] = useState(0);
   const [feedback, setFeedback] = useState("");
   const [toast, setToast] = useState("");
 
-  const challenges = useMemo(() => challengesFor(level), [level]);
+  const challenges = useMemo(() => challengesFor(level, difficulty), [level, difficulty]);
   const current = challenges[challengeSlot] ?? challenges[0];
   const done = progress.reading[level].done;
 
@@ -98,7 +102,9 @@ export function Leer() {
       </div>
       <div className="panel">
         <h1 className="section-title">Aprender a leer</h1>
-        <p className="section-sub">Completa 3 de 5 retos para un pack de colorear</p>
+        <p className="section-sub">
+          Completa 3 de 5 retos para desbloquear un libro · Dificultad: {difficultyLabel(difficulty)}
+        </p>
 
         <div className="level-pills" role="tablist" aria-label="Nivel">
           {LEVELS.map((l) => (
