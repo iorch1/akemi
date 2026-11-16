@@ -132,6 +132,66 @@
   background: linear-gradient(135deg, #fff 0%, #ffd4d4 100%);
 }
 
+.panel-soft {
+  background: rgba(255, 255, 255, 0.55);
+  border-radius: 1.25rem;
+  padding: 1rem 1rem 0.85rem;
+  box-shadow: var(--shadow);
+}
+
+.home-progress-title {
+  margin: 0;
+  font-family: var(--font-display);
+  font-size: 1.25rem;
+}
+
+.home-progress-count {
+  margin: 0.35rem 0 0.75rem;
+  font-size: 0.95rem;
+}
+
+.home-next-unlock {
+  margin-bottom: 0.85rem;
+}
+
+.home-next-label {
+  margin: 0;
+  font-weight: 800;
+  font-size: 0.95rem;
+}
+
+.home-next-detail {
+  margin: 0.15rem 0 0.45rem;
+  font-size: 0.88rem;
+  opacity: 0.9;
+}
+
+.home-progress-bar {
+  position: relative;
+  height: 1.35rem;
+  border-radius: 999px;
+  background: rgba(11, 58, 74, 0.12);
+  overflow: hidden;
+}
+
+.home-progress-fill {
+  height: 100%;
+  border-radius: 999px;
+  background: linear-gradient(90deg, #2ec4b6, #1a9bb5);
+  transition: width 0.35s ease;
+}
+
+.home-progress-text {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.75rem;
+  font-weight: 800;
+  color: var(--ink);
+}
+
 @media (min-width: 720px) {
   .home-grid {
     grid-template-columns: 1fr 1fr;

@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 320 320" width="320" height="320">
+  <rect width="320" height="320" fill="#f7fbff"/>
+  <g fill="none" stroke="#0b3a4a" stroke-width="3" stroke-linecap="round" stroke-linejoin="round">
+
+    <circle cx="160" cy="100" r="42"/>
+    <path d="M160 142 L160 210"/>
+    <path d="M160 165 L115 190"/>
+    <path d="M160 165 L205 190"/>
+    <path d="M160 210 L130 250"/>
+    <path d="M160 210 L190 250"/>
+    <path d="M205 165 L245 120 L230 95 L195 140 Z"/>
+    <path d="M140 85 L180 55 L175 85 Z" stroke-width="2"/>
+    <circle cx="145" cy="98" r="4"/>
+    <circle cx="175" cy="98" r="4"/>
+    <path d="M150 115 Q160 122 170 115"/>
+    <path d="M95 200 L110 170 L125 200" stroke-width="2"/>
+  
+  </g>
+  <title>Akemi original 2-3</title>
+</svg>

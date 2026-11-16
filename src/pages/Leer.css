@@ -53,3 +53,48 @@
     grid-template-columns: repeat(4, 1fr);
   }
 }
+
+.leer-pack-hint {
+  margin: 0.5rem 0 0.35rem;
+  font-size: 0.9rem;
+  line-height: 1.4;
+}
+
+.leer-challenge-dots {
+  list-style: none;
+  margin: 0.5rem 0 0.75rem;
+  padding: 0;
+  display: flex;
+  gap: 0.45rem;
+  justify-content: center;
+}
+
+.dot-slot {
+  width: 2rem;
+  height: 2rem;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 800;
+  font-size: 0.85rem;
+  background: rgba(11, 58, 74, 0.1);
+  border: 2px solid transparent;
+}
+
+.dot-slot.done {
+  background: #2ec4b6;
+  color: #fff;
+}
+
+.dot-slot.active {
+  border-color: var(--sun);
+  box-shadow: 0 0 0 2px rgba(255, 209, 102, 0.35);
+}
+
+.leer-toast {
+  margin-top: 0.5rem;
+  font-weight: 800;
+  color: #1a9bb5;
+  font-size: 0.95rem;
+}

@@ -1,96 +1,45 @@
 import { useEffect, useMemo, useState } from "react";
 import { BackButton } from "../components/BackButton";
-import {
-  readingTextForLetter,
-  speak,
-  type SpeakMode,
-} from "../utils/speech";
+import { useProgress } from "../hooks/useProgress";
+import { packById, READING_PACK_BY_LEVEL } from "../lib/coloring-packs";
+import { completeReadingChallenge, type ReadingLevelId } from "../lib/progress";
+import { challengesFor, distractorsFor } from "../lib/reading-challenges";
+import { readingTextForLetter, speak, type SpeakMode } from "../utils/speech";
 import "./Leer.css";
 
-type Level = "letras" | "silabas" | "palabras" | "frases";
-
-const LETTERS = "ABCDEFGHIJKLMNÑOPQRSTUVWXYZ".split("");
-const SYLLABLES = [
-  "ma", "me", "mi", "mo", "mu",
-  "pa", "pe", "pi", "po", "pu",
-  "la", "le", "li", "lo", "lu",
-  "sa", "se", "si", "so", "su",
-  "ca", "que", "qui", "co", "cu",
-  "ra", "re", "ri", "ro", "ru",
-];
-const WORDS = [
-  "sol", "luna", "casa", "mesa", "gato", "perro", "agua", "flor",
-  "amigo", "libro", "mano", "pelo", "rojo", "azul", "verde", "papa",
-  "mama", "nube", "rio", "pan",
-];
-const PHRASES = [
-  "El sol brilla",
-  "Mi gato duerme",
-  "Me gusta leer",
-  "Voy a casa",
-  "La luna sale",
-  "Un pez nada",
-  "Tengo un amigo",
-  "Quiero un abrazo",
-];
-
-const LEVELS: { id: Level; label: string }[] = [
+const LEVELS: { id: ReadingLevelId; label: string }[] = [
   { id: "letras", label: "Letras" },
   { id: "silabas", label: "Sílabas" },
   { id: "palabras", label: "Palabras" },
   { id: "frases", label: "Frases" },
 ];
 
-function pick<T>(arr: T[], exclude?: T): T {
-  let next = arr[Math.floor(Math.random() * arr.length)];
-  if (exclude !== undefined && arr.length > 1) {
-    while (next === exclude) {
-      next = arr[Math.floor(Math.random() * arr.length)];
-    }
-  }
-  return next;
-}
-
-function optionsFor(level: Level, correct: string): string[] {
-  const pool =
-    level === "letras"
-      ? LETTERS
-      : level === "silabas"
-        ? SYLLABLES
-        : level === "palabras"
-          ? WORDS
-          : PHRASES;
-  const opts = new Set<string>([correct]);
-  while (opts.size < Math.min(4, pool.length)) {
-    opts.add(pick(pool));
-  }
-  return Array.from(opts).sort(() => Math.random() - 0.5);
-}
-
 export function Leer() {
-  const [level, setLevel] = useState<Level>("letras");
-  const [target, setTarget] = useState(() => pick(LETTERS));
+  const [progress, setProgress] = useProgress();
+  const [level, setLevel] = useState<ReadingLevelId>("letras");
+  const [challengeSlot, setChallengeSlot] = useState(0);
   const [feedback, setFeedback] = useState("");
-  const [streak, setStreak] = useState(0);
+  const [toast, setToast] = useState("");
 
-  const pool = useMemo(() => {
-    if (level === "letras") return LETTERS;
-    if (level === "silabas") return SYLLABLES;
-    if (level === "palabras") return WORDS;
-    return PHRASES;
-  }, [level]);
+  const challenges = useMemo(() => challengesFor(level), [level]);
+  const current = challenges[challengeSlot] ?? challenges[0];
+  const done = progress.reading[level].done;
 
-  const choices = useMemo(() => optionsFor(level, target), [level, target]);
+  const choices = useMemo(
+    () => distractorsFor(level, current.correct),
+    [level, current.correct, challengeSlot],
+  );
 
   useEffect(() => {
-    setTarget(pick(pool));
+    setChallengeSlot(0);
     setFeedback("");
-  }, [level, pool]);
+    setToast("");
+  }, [level]);
 
-  function nextItem() {
-    setTarget((prev) => pick(pool, prev));
-    setFeedback("");
-  }
+  useEffect(() => {
+    const next = challenges.findIndex((c) => !done.includes(c.index));
+    setChallengeSlot(next >= 0 ? next : 0);
+  }, [challenges, done, level]);
 
   function listen() {
     const mode: SpeakMode =
@@ -101,22 +50,46 @@ export function Leer() {
           : level === "palabras"
             ? "word"
             : "phrase";
-    const text = level === "letras" ? readingTextForLetter(target) : target;
+    const text =
+      level === "letras"
+        ? readingTextForLetter(current.correct)
+        : level === "palabras" || level === "frases"
+          ? current.correct
+          : current.correct;
     speak(text, { mode });
   }
 
   function choose(opt: string) {
-    if (opt === target) {
+    if (done.includes(current.index)) return;
+    if (opt === current.correct) {
       setFeedback("¡Muy bien!");
-      setStreak((s) => s + 1);
       speak("¡Muy bien!", { mode: "feedback" });
-      setTimeout(nextItem, 700);
+      const { state, packUnlocked } = completeReadingChallenge(
+        progress,
+        level,
+        current.index,
+      );
+      setProgress(state);
+      if (packUnlocked) {
+        const name = packById(packUnlocked)?.name ?? "pack";
+        setToast(`¡Nuevo pack desbloqueado: ${name}! 🎨`);
+        speak(`¡Desbloqueaste ${name}!`, { mode: "feedback" });
+      }
+      setTimeout(() => {
+        setFeedback("");
+        const remaining = challenges.findIndex(
+          (c) => !state.reading[level].done.includes(c.index),
+        );
+        if (remaining >= 0) setChallengeSlot(remaining);
+      }, 700);
     } else {
       setFeedback("Inténtalo otra vez");
-      setStreak(0);
       speak("Inténtalo otra vez", { mode: "feedback" });
     }
   }
+
+  const packId = READING_PACK_BY_LEVEL[level];
+  const packName = packId ? packById(packId)?.name : "";
 
   return (
     <main className="screen leer">
@@ -125,7 +98,7 @@ export function Leer() {
       </div>
       <div className="panel">
         <h1 className="section-title">Aprender a leer</h1>
-        <p className="section-sub">Escucha y elige la respuesta correcta</p>
+        <p className="section-sub">Completa 3 de 5 retos para un pack de colorear</p>
 
         <div className="level-pills" role="tablist" aria-label="Nivel">
           {LEVELS.map((l) => (
@@ -140,13 +113,31 @@ export function Leer() {
           ))}
         </div>
 
+        {packName && (
+          <p className="leer-pack-hint">
+            Pack «{packName}»: retos completados{" "}
+            <strong>{Math.min(3, done.length)}</strong>/3 (máx. 5 retos)
+          </p>
+        )}
+
+        <ul className="leer-challenge-dots" aria-label="Retos del nivel">
+          {challenges.map((c) => (
+            <li
+              key={c.index}
+              className={`dot-slot ${done.includes(c.index) ? "done" : c.index === current.index ? "active" : ""}`}
+            >
+              {done.includes(c.index) ? "✓" : c.index + 1}
+            </li>
+          ))}
+        </ul>
+
         <div className="leer-stage">
-          <p className="leer-prompt">¿Cuál es?</p>
+          <p className="leer-prompt">{current.prompt}</p>
           <button type="button" className="leer-listen btn btn-sky" onClick={listen}>
             🔊 Escuchar
           </button>
           <p className="leer-hint" aria-live="polite">
-            {level === "letras" ? "Una letra" : level === "silabas" ? "Una sílaba" : level === "palabras" ? "Una palabra" : "Una frase"}
+            Reto {current.index + 1} de 5 · Elige la respuesta correcta
           </p>
           <div className="leer-choices">
             {choices.map((c) => (
@@ -158,7 +149,7 @@ export function Leer() {
           <p className={`feedback ${feedback === "¡Muy bien!" ? "ok" : feedback ? "bad" : ""}`}>
             {feedback}
           </p>
-          <p className="leer-streak">Racha: {streak}</p>
+          {toast && <p className="leer-toast">{toast}</p>}
         </div>
       </div>
     </main>
