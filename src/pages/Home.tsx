@@ -10,21 +10,21 @@ import "./Home.css";
 const sections = [
   {
     to: "/leer",
-    title: "Aprender a leer",
-    desc: "Retos y packs de dibujo",
+    title: "Leer",
+    desc: "Letras, sílabas y palabras",
     emoji: "📖",
     className: "tile-leer",
   },
   {
     to: "/mates",
     title: "Matemáticas",
-    desc: "Racha de 5 · desbloquea arte",
+    desc: "Sumas y retos con racha",
     emoji: "🔢",
     className: "tile-mates",
   },
   {
     to: "/juegos",
-    title: "Juegos clásicos",
+    title: "Juegos",
     desc: "Tetris y Snake",
     emoji: "🎮",
     className: "tile-juegos",
@@ -32,7 +32,7 @@ const sections = [
   {
     to: "/dibujo",
     title: "Dibujo",
-    desc: "Plantillas desbloqueadas",
+    desc: "Colorea y lienzo libre",
     emoji: "🎨",
     className: "tile-dibujo",
   },
@@ -69,7 +69,19 @@ export function Home() {
         <p className="home-cta-hint">Elige una aventura</p>
       </header>
 
-      <section className="home-progress panel-soft" aria-labelledby="progreso-titulo">
+      <nav className="home-grid home-grid-primary" aria-label="Secciones principales">
+        {sections.map((s) => (
+          <Link key={s.to} to={s.to} className={`home-tile ${s.className}`}>
+            <span className="tile-emoji" aria-hidden>
+              {s.emoji}
+            </span>
+            <span className="tile-title">{s.title}</span>
+            <span className="tile-desc">{s.desc}</span>
+          </Link>
+        ))}
+      </nav>
+
+      <section className="home-progress panel-soft home-collection" aria-labelledby="progreso-titulo">
         <h2 id="progreso-titulo" className="home-progress-title">
           Tu colección
         </h2>
@@ -83,18 +95,6 @@ export function Home() {
         </div>
         <PackCollage progress={progress} compact />
       </section>
-
-      <nav className="home-grid" aria-label="Secciones">
-        {sections.map((s) => (
-          <Link key={s.to} to={s.to} className={`home-tile ${s.className}`}>
-            <span className="tile-emoji" aria-hidden>
-              {s.emoji}
-            </span>
-            <span className="tile-title">{s.title}</span>
-            <span className="tile-desc">{s.desc}</span>
-          </Link>
-        ))}
-      </nav>
     </main>
   );
 }

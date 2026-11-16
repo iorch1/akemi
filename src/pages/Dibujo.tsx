@@ -1,24 +1,15 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { BackButton } from "../components/BackButton";
+import { ColorPalette } from "../components/ColorPalette";
 import { useProgress } from "../hooks/useProgress";
+import { BRUSH_PRESETS, type BrushPreset } from "../lib/drawing-tools";
 import { COLORING_PACKS, packForImage } from "../lib/coloring-packs";
 import { drawSvgOnCanvas } from "../lib/svg-canvas";
 import "./Dibujo.css";
 
 type Mode = "colorear" | "libre";
 
-const COLORS = [
-  "#0b3a4a",
-  "#ff6b6b",
-  "#ff9f1c",
-  "#ffd166",
-  "#2ec4b6",
-  "#1a9bb5",
-  "#7bdff2",
-  "#ffffff",
-  "#c0392b",
-  "#27ae60",
-];
+const MAX_UNDO = 24;
 
 function hexToRgb(hex: string) {
   const h = hex.replace("#", "");
@@ -71,6 +62,32 @@ function floodFill(ctx: CanvasRenderingContext2D, x: number, y: number, fillHex:
   ctx.putImageData(img, 0, 0);
 }
 
+function useCanvasUndo(canvasRef: React.RefObject<HTMLCanvasElement | null>) {
+  const stack = useRef<ImageData[]>([]);
+
+  const snapshot = useCallback(() => {
+    const canvas = canvasRef.current;
+    const ctx = canvas?.getContext("2d");
+    if (!canvas || !ctx) return;
+    stack.current.push(ctx.getImageData(0, 0, canvas.width, canvas.height));
+    if (stack.current.length > MAX_UNDO) stack.current.shift();
+  }, [canvasRef]);
+
+  const undo = useCallback(() => {
+    const canvas = canvasRef.current;
+    const ctx = canvas?.getContext("2d");
+    if (!canvas || !ctx || stack.current.length === 0) return;
+    const prev = stack.current.pop()!;
+    ctx.putImageData(prev, 0, 0);
+  }, [canvasRef]);
+
+  const resetStack = useCallback(() => {
+    stack.current = [];
+  }, []);
+
+  return { snapshot, undo, resetStack, canUndo: () => stack.current.length > 0 };
+}
+
 export function Dibujo() {
   const [progress] = useProgress();
   const unlockedByPack = useMemo(
@@ -85,13 +102,16 @@ export function Dibujo() {
   const [mode, setMode] = useState<Mode>("colorear");
   const [packId, setPackId] = useState(unlockedByPack[0]?.pack.id ?? "");
   const [templateId, setTemplateId] = useState(unlockedByPack[0]?.pages[0]?.id ?? "");
-  const [color, setColor] = useState(COLORS[1]);
-  const [brush, setBrush] = useState(8);
+  const [color, setColor] = useState("#ff6b6b");
+  const [brushPreset, setBrushPreset] = useState<BrushPreset>(BRUSH_PRESETS[4]);
   const [erasing, setErasing] = useState(false);
   const colorCanvasRef = useRef<HTMLCanvasElement>(null);
   const freeCanvasRef = useRef<HTMLCanvasElement>(null);
   const drawing = useRef(false);
   const last = useRef<{ x: number; y: number } | null>(null);
+
+  const colorUndo = useCanvasUndo(colorCanvasRef);
+  const freeUndo = useCanvasUndo(freeCanvasRef);
 
   const activePackRow = unlockedByPack.find((r) => r.pack.id === packId) ?? unlockedByPack[0];
   const packPages = activePackRow?.pages ?? [];
@@ -117,13 +137,14 @@ export function Dibujo() {
     if (!canvas || !currentTemplate) return;
     const ctx = canvas.getContext("2d");
     if (!ctx) return;
+    colorUndo.resetStack();
     try {
       await drawSvgOnCanvas(ctx, currentTemplate.src, canvas.width, canvas.height);
     } catch {
       ctx.fillStyle = "#f7fbff";
       ctx.fillRect(0, 0, canvas.width, canvas.height);
     }
-  }, [currentTemplate]);
+  }, [currentTemplate, colorUndo]);
 
   useEffect(() => {
     if (mode === "colorear" && currentTemplate) void paintTemplate();
@@ -134,9 +155,10 @@ export function Dibujo() {
     if (!canvas || mode !== "libre") return;
     const ctx = canvas.getContext("2d");
     if (!ctx) return;
+    freeUndo.resetStack();
     ctx.fillStyle = "#ffffff";
     ctx.fillRect(0, 0, canvas.width, canvas.height);
-  }, [mode]);
+  }, [mode, freeUndo]);
 
   function pointerPos(canvas: HTMLCanvasElement, e: React.PointerEvent) {
     const rect = canvas.getBoundingClientRect();
@@ -153,14 +175,30 @@ export function Dibujo() {
     if (!canvas) return;
     const ctx = canvas.getContext("2d");
     if (!ctx) return;
+    colorUndo.snapshot();
     const p = pointerPos(canvas, e);
-    floodFill(ctx, p.x, p.y, color);
+    const fill = erasing ? "#ffffff" : color;
+    floodFill(ctx, p.x, p.y, fill);
+  }
+
+  function applyBrushStyle(ctx: CanvasRenderingContext2D, preset: BrushPreset, erase: boolean) {
+    ctx.lineCap = preset.kind === "brocha" ? "butt" : "round";
+    ctx.lineJoin = "round";
+    ctx.lineWidth = preset.size;
+    if (erase) {
+      ctx.globalAlpha = 1;
+      ctx.strokeStyle = "#ffffff";
+    } else {
+      ctx.globalAlpha = preset.opacity;
+      ctx.strokeStyle = color;
+    }
   }
 
   function startFree(e: React.PointerEvent<HTMLCanvasElement>) {
     const canvas = freeCanvasRef.current;
     if (!canvas) return;
     canvas.setPointerCapture(e.pointerId);
+    freeUndo.snapshot();
     drawing.current = true;
     last.current = pointerPos(canvas, e);
   }
@@ -172,14 +210,12 @@ export function Dibujo() {
     const ctx = canvas.getContext("2d");
     if (!ctx || !last.current) return;
     const p = pointerPos(canvas, e);
-    ctx.lineCap = "round";
-    ctx.lineJoin = "round";
-    ctx.lineWidth = brush;
-    ctx.strokeStyle = erasing ? "#ffffff" : color;
+    applyBrushStyle(ctx, brushPreset, erasing);
     ctx.beginPath();
     ctx.moveTo(last.current.x, last.current.y);
     ctx.lineTo(p.x, p.y);
     ctx.stroke();
+    ctx.globalAlpha = 1;
     last.current = p;
   }
 
@@ -193,12 +229,49 @@ export function Dibujo() {
     if (!canvas) return;
     const ctx = canvas.getContext("2d");
     if (!ctx) return;
+    freeUndo.snapshot();
     ctx.fillStyle = "#ffffff";
     ctx.fillRect(0, 0, canvas.width, canvas.height);
   }
 
   const lockedCount = COLORING_PACKS.flatMap((p) => p.images).length - progress.unlockedImages.length;
   const packLabel = currentTemplate ? packForImage(currentTemplate.id)?.name : "";
+
+  const toolBar = (
+    <div className="dibujo-toolbar">
+      <button
+        type="button"
+        className={`btn btn-ghost ${erasing ? "" : "tool-active"}`}
+        onClick={() => setErasing(false)}
+      >
+        Pintar
+      </button>
+      <button
+        type="button"
+        className={`btn ${erasing ? "btn-coral" : "btn-ghost"}`}
+        onClick={() => setErasing(true)}
+      >
+        Goma
+      </button>
+      <button
+        type="button"
+        className="btn btn-ghost"
+        onClick={() => (mode === "colorear" ? colorUndo.undo() : freeUndo.undo())}
+      >
+        ↩ Deshacer
+      </button>
+      <button
+        type="button"
+        className="btn btn-leaf"
+        onClick={() => {
+          if (mode === "colorear") void paintTemplate();
+          else clearFree();
+        }}
+      >
+        Limpiar
+      </button>
+    </div>
+  );
 
   return (
     <main className="screen dibujo">
@@ -229,21 +302,13 @@ export function Dibujo() {
           </button>
         </div>
 
-        <div className="color-row" role="listbox" aria-label="Colores">
-          {COLORS.map((c) => (
-            <button
-              key={c}
-              type="button"
-              className={`swatch ${color === c ? "active" : ""}`}
-              style={{ background: c }}
-              aria-label={`Color ${c}`}
-              onClick={() => {
-                setColor(c);
-                setErasing(false);
-              }}
-            />
-          ))}
-        </div>
+        <ColorPalette
+          color={color}
+          onColor={setColor}
+          onPick={() => setErasing(false)}
+        />
+
+        {toolBar}
 
         {mode === "colorear" ? (
           <>
@@ -282,7 +347,9 @@ export function Dibujo() {
                   ))}
                 </div>
                 {packLabel && <p className="dibujo-pack-label">{packLabel}</p>}
-                <p className="dibujo-hint">Toca una zona para rellenarla de color</p>
+                <p className="dibujo-hint">
+                  {erasing ? "Toca una zona para borrar (blanco)" : "Toca una zona para rellenarla de color"}
+                </p>
                 <div className="canvas-frame">
                   <canvas
                     ref={colorCanvasRef}
@@ -292,37 +359,28 @@ export function Dibujo() {
                     onPointerDown={onColorPointer}
                   />
                 </div>
-                <div className="score-bar">
-                  <button type="button" className="btn btn-leaf" onClick={() => void paintTemplate()}>
-                    Limpiar
-                  </button>
-                </div>
               </>
             )}
           </>
         ) : (
           <>
-            <div className="brush-row">
-              <label>
-                Grosor
-                <input
-                  type="range"
-                  min={2}
-                  max={40}
-                  value={brush}
-                  onChange={(e) => setBrush(Number(e.target.value))}
-                />
-              </label>
-              <button
-                type="button"
-                className={`btn ${erasing ? "btn-coral" : "btn-ghost"}`}
-                onClick={() => setErasing((v) => !v)}
-              >
-                {erasing ? "Borrando" : "Borrar"}
-              </button>
-              <button type="button" className="btn btn-leaf" onClick={clearFree}>
-                Limpiar todo
-              </button>
+            <p className="dibujo-brush-title">Herramientas</p>
+            <div className="brush-preset-row">
+              {BRUSH_PRESETS.map((p) => (
+                <button
+                  key={p.id}
+                  type="button"
+                  className={`brush-preset ${brushPreset.id === p.id ? "active" : ""}`}
+                  onClick={() => {
+                    setBrushPreset(p);
+                    setErasing(false);
+                  }}
+                  title={p.label}
+                >
+                  {p.kind === "lapiz" ? "✏️" : p.kind === "plumon" ? "🖍️" : "🖌️"}
+                  <span>{p.label}</span>
+                </button>
+              ))}
             </div>
             <p className="dibujo-hint">Lienzo grande: desliza para dibujar · desplázate para explorar</p>
             <div className="free-scroll">

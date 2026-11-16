@@ -11,9 +11,17 @@ import { activeProfile, loadProfiles, progressKey } from "./profiles";
 
 export type ReadingLevelId = "letras" | "silabas" | "palabras" | "frases";
 
+export type ReadingModeProgress = {
+  done: number[];
+  /** Las 5 respuestas del modo completadas (nivel de lectura superado). */
+  nivelCompleto?: boolean;
+};
+
 export type ProgressState = {
   unlockedImages: string[];
-  reading: Record<ReadingLevelId, { done: number[] }>;
+  reading: Record<ReadingLevelId, ReadingModeProgress>;
+  /** Orden de modos terminados (letras → sílabas → palabras → frases) para celebraciones. */
+  readingModesCompleted?: ReadingLevelId[];
   math: {
     level: number;
     streak: number;
@@ -31,10 +39,29 @@ function emptyReading(): ProgressState["reading"] {
   };
 }
 
+function normalizeReading(raw?: Partial<ReadingModeProgress>): ReadingModeProgress {
+  const done = raw?.done ?? [];
+  const nivelCompleto = raw?.nivelCompleto ?? done.length >= 5;
+  return { done, nivelCompleto };
+}
+
+export const READING_LEVEL_ORDER: ReadingLevelId[] = ["letras", "silabas", "palabras", "frases"];
+
+export function readingLevelNumber(level: ReadingLevelId): number {
+  return READING_LEVEL_ORDER.indexOf(level) + 1;
+}
+
+export function nextReadingLevel(level: ReadingLevelId): ReadingLevelId | null {
+  const i = READING_LEVEL_ORDER.indexOf(level);
+  if (i < 0 || i >= READING_LEVEL_ORDER.length - 1) return null;
+  return READING_LEVEL_ORDER[i + 1];
+}
+
 export function defaultProgress(): ProgressState {
   return {
     unlockedImages: [...STARTER_IMAGE_IDS],
     reading: emptyReading(),
+    readingModesCompleted: [],
     math: {
       level: 1,
       streak: 0,
@@ -51,11 +78,12 @@ function normalize(raw: Partial<ProgressState> | null): ProgressState {
   return {
     unlockedImages: ALL_IMAGE_IDS.filter((id) => unlocked.has(id)),
     reading: {
-      letras: { done: raw.reading?.letras?.done ?? [] },
-      silabas: { done: raw.reading?.silabas?.done ?? [] },
-      palabras: { done: raw.reading?.palabras?.done ?? [] },
-      frases: { done: raw.reading?.frases?.done ?? [] },
+      letras: normalizeReading(raw.reading?.letras),
+      silabas: normalizeReading(raw.reading?.silabas),
+      palabras: normalizeReading(raw.reading?.palabras),
+      frases: normalizeReading(raw.reading?.frases),
     },
+    readingModesCompleted: raw.readingModesCompleted ?? [],
     math: {
       level: Math.max(1, raw.math?.level ?? 1),
       streak: Math.min(5, Math.max(0, raw.math?.streak ?? 0)),
@@ -98,23 +126,45 @@ function unlockPackImages(state: ProgressState, packId: string): ProgressState {
   return { ...state, unlockedImages: ALL_IMAGE_IDS.filter((id) => set.has(id)) };
 }
 
-/** Registra un reto de lectura completado (0–4). Desbloquea pack si hay 3 aciertos distintos. */
+/** Registra un reto de lectura completado (0–4). Desbloquea pack si hay 3 aciertos; al 5 marca nivel completo. */
 export function completeReadingChallenge(
   state: ProgressState,
   level: ReadingLevelId,
   challengeIndex: number,
-): { state: ProgressState; packUnlocked: string | null } {
-  if (challengeIndex < 0 || challengeIndex > 4) return { state, packUnlocked: null };
-  const done = state.reading[level].done;
-  if (done.includes(challengeIndex)) return { state, packUnlocked: null };
+): {
+  state: ProgressState;
+  packUnlocked: string | null;
+  nivelCompleto: boolean;
+  nextLevel: ReadingLevelId | null;
+} {
+  if (challengeIndex < 0 || challengeIndex > 4) {
+    return { state, packUnlocked: null, nivelCompleto: false, nextLevel: null };
+  }
+  const mode = state.reading[level];
+  const done = mode.done;
+  if (done.includes(challengeIndex)) {
+    return { state, packUnlocked: null, nivelCompleto: false, nextLevel: null };
+  }
+
+  const newDone = [...done, challengeIndex].sort((a, b) => a - b);
+  const justFinishedLevel = newDone.length >= 5 && !mode.nivelCompleto;
 
   let next: ProgressState = {
     ...state,
     reading: {
       ...state.reading,
-      [level]: { done: [...done, challengeIndex].sort((a, b) => a - b) },
+      [level]: {
+        done: newDone,
+        nivelCompleto: newDone.length >= 5 || mode.nivelCompleto,
+      },
     },
   };
+
+  if (justFinishedLevel) {
+    const completed = new Set(next.readingModesCompleted ?? []);
+    completed.add(level);
+    next = { ...next, readingModesCompleted: Array.from(completed) };
+  }
 
   let packUnlocked: string | null = null;
   const packId = READING_PACK_BY_LEVEL[level];
@@ -126,7 +176,13 @@ export function completeReadingChallenge(
       packUnlocked = packId;
     }
   }
-  return { state: next, packUnlocked };
+
+  return {
+    state: next,
+    packUnlocked,
+    nivelCompleto: justFinishedLevel,
+    nextLevel: justFinishedLevel ? nextReadingLevel(level) : null,
+  };
 }
 
 export type MathAnswerResult = {
