@@ -22,6 +22,11 @@ if [[ ! -f "${DIST}/index.html" ]]; then
   exit 1
 fi
 
+# httpd needs traverse on $HOME and world-readable dirs under dist/ (scp/umask often leaves assets/ 700).
+HOMEDIR="/home/akhio"
+chmod a+x "${HOMEDIR}" "${HOMEDIR}/akemi-web" 2>/dev/null || true
+chmod -R a+rX "${DIST}"
+
 cp "${SRC}" "${DEST}"
 restorecon -v "${DEST}" 2>/dev/null || true
 if command -v chcon >/dev/null; then
