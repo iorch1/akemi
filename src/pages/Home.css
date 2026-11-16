@@ -6,6 +6,14 @@
 }
 
 .home-hero {
+  order: 1;
+}
+
+.home-profile-bar {
+  order: 0;
+}
+
+.home-hero {
   position: relative;
   text-align: center;
   padding: clamp(1.5rem, 6vw, 3rem) 1rem 1rem;
@@ -66,6 +74,15 @@
   display: grid;
   gap: 0.9rem;
   grid-template-columns: 1fr;
+}
+
+.home-grid-primary {
+  order: 2;
+}
+
+.home-collection {
+  order: 3;
+  margin-top: 0.25rem;
 }
 
 .home-tile {
