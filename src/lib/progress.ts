@@ -2,26 +2,28 @@ import {
   ALL_IMAGE_IDS,
   COLORING_PACKS,
   MATH_PACK_BY_LEVEL,
-  READING_PACK_BY_LEVEL,
+  READING_PACK_ORDER,
   STARTER_IMAGE_IDS,
   SUPER_PACK_IDS,
   packById,
 } from "./coloring-packs";
-import { activeProfile, loadProfiles, progressKey } from "./profiles";
+import { activeProfile, loadProfiles, progressKey, runProgressSchemaMigration } from "./profiles";
 
 export type ReadingLevelId = "letras" | "silabas" | "palabras" | "frases";
 
+export const READING_POINTS_PER_SECTION = 5;
+export const READING_POINTS_TO_PASS = 20;
+
 export type ReadingModeProgress = {
+  /** Índices de retos acertados (como mucho 5 puntos por sección). */
   done: number[];
-  /** Las 5 respuestas del modo completadas (nivel de lectura superado). */
-  nivelCompleto?: boolean;
 };
 
 export type ProgressState = {
   unlockedImages: string[];
   reading: Record<ReadingLevelId, ReadingModeProgress>;
-  /** Orden de modos terminados (letras → sílabas → palabras → frases) para celebraciones. */
-  readingModesCompleted?: ReadingLevelId[];
+  /** Cada 20/20 en las cuatro secciones desbloquea libro-02…05 y reinicia retos. */
+  readingRound: number;
   math: {
     level: number;
     streak: number;
@@ -40,9 +42,8 @@ function emptyReading(): ProgressState["reading"] {
 }
 
 function normalizeReading(raw?: Partial<ReadingModeProgress>): ReadingModeProgress {
-  const done = raw?.done ?? [];
-  const nivelCompleto = raw?.nivelCompleto ?? done.length >= 5;
-  return { done, nivelCompleto };
+  const done = (raw?.done ?? []).filter((i) => i >= 0 && i <= 4).slice(0, READING_POINTS_PER_SECTION);
+  return { done: [...new Set(done)].sort((a, b) => a - b) };
 }
 
 export const READING_LEVEL_ORDER: ReadingLevelId[] = ["letras", "silabas", "palabras", "frases"];
@@ -51,17 +52,27 @@ export function readingLevelNumber(level: ReadingLevelId): number {
   return READING_LEVEL_ORDER.indexOf(level) + 1;
 }
 
-export function nextReadingLevel(level: ReadingLevelId): ReadingLevelId | null {
-  const i = READING_LEVEL_ORDER.indexOf(level);
-  if (i < 0 || i >= READING_LEVEL_ORDER.length - 1) return null;
-  return READING_LEVEL_ORDER[i + 1];
+export function readingSectionPoints(state: ProgressState, level: ReadingLevelId): number {
+  return Math.min(READING_POINTS_PER_SECTION, state.reading[level].done.length);
+}
+
+export function totalReadingPoints(state: ProgressState): number {
+  return READING_LEVEL_ORDER.reduce((sum, lvl) => sum + readingSectionPoints(state, lvl), 0);
+}
+
+export function isReadingRoundComplete(state: ProgressState): boolean {
+  return totalReadingPoints(state) >= READING_POINTS_TO_PASS;
+}
+
+export function nextReadingPackId(state: ProgressState): string | null {
+  return READING_PACK_ORDER[state.readingRound] ?? null;
 }
 
 export function defaultProgress(): ProgressState {
   return {
     unlockedImages: [...STARTER_IMAGE_IDS],
     reading: emptyReading(),
-    readingModesCompleted: [],
+    readingRound: 0,
     math: {
       level: 1,
       streak: 0,
@@ -83,7 +94,7 @@ function normalize(raw: Partial<ProgressState> | null): ProgressState {
       palabras: normalizeReading(raw.reading?.palabras),
       frases: normalizeReading(raw.reading?.frases),
     },
-    readingModesCompleted: raw.readingModesCompleted ?? [],
+    readingRound: Math.max(0, Math.min(READING_PACK_ORDER.length, raw.readingRound ?? 0)),
     math: {
       level: Math.max(1, raw.math?.level ?? 1),
       streak: Math.min(5, Math.max(0, raw.math?.streak ?? 0)),
@@ -95,6 +106,7 @@ function normalize(raw: Partial<ProgressState> | null): ProgressState {
 
 function currentProgressKey(): string | null {
   const store = loadProfiles();
+  runProgressSchemaMigration(store);
   const profile = activeProfile(store);
   if (!profile) return null;
   return progressKey(profile.id);
@@ -126,7 +138,7 @@ function unlockPackImages(state: ProgressState, packId: string): ProgressState {
   return { ...state, unlockedImages: ALL_IMAGE_IDS.filter((id) => set.has(id)) };
 }
 
-/** Registra un reto de lectura completado (0–4). Desbloquea pack si hay 3 aciertos; al 5 marca nivel completo. */
+/** Registra un reto de lectura acertado. Suma 1 punto por sección (máx. 5). Al 20/20 desbloquea libro y reinicia retos. */
 export function completeReadingChallenge(
   state: ProgressState,
   level: ReadingLevelId,
@@ -134,55 +146,47 @@ export function completeReadingChallenge(
 ): {
   state: ProgressState;
   packUnlocked: string | null;
-  nivelCompleto: boolean;
-  nextLevel: ReadingLevelId | null;
+  roundComplete: boolean;
 } {
   if (challengeIndex < 0 || challengeIndex > 4) {
-    return { state, packUnlocked: null, nivelCompleto: false, nextLevel: null };
+    return { state, packUnlocked: null, roundComplete: false };
   }
   const mode = state.reading[level];
-  const done = mode.done;
-  if (done.includes(challengeIndex)) {
-    return { state, packUnlocked: null, nivelCompleto: false, nextLevel: null };
+  if (mode.done.includes(challengeIndex) || mode.done.length >= READING_POINTS_PER_SECTION) {
+    return { state, packUnlocked: null, roundComplete: false };
   }
 
-  const newDone = [...done, challengeIndex].sort((a, b) => a - b);
-  const justFinishedLevel = newDone.length >= 5 && !mode.nivelCompleto;
-
+  const newDone = [...mode.done, challengeIndex].sort((a, b) => a - b);
   let next: ProgressState = {
     ...state,
     reading: {
       ...state.reading,
-      [level]: {
-        done: newDone,
-        nivelCompleto: newDone.length >= 5 || mode.nivelCompleto,
-      },
+      [level]: { done: newDone },
     },
   };
 
-  if (justFinishedLevel) {
-    const completed = new Set(next.readingModesCompleted ?? []);
-    completed.add(level);
-    next = { ...next, readingModesCompleted: Array.from(completed) };
-  }
-
   let packUnlocked: string | null = null;
-  const packId = READING_PACK_BY_LEVEL[level];
-  if (packId && next.reading[level].done.length >= 3) {
-    const pack = packById(packId);
-    const already = pack?.images.every((i) => next.unlockedImages.includes(i.id));
-    if (pack && !already) {
-      next = unlockPackImages(next, packId);
-      packUnlocked = packId;
+  let roundComplete = false;
+
+  if (totalReadingPoints(next) >= READING_POINTS_TO_PASS) {
+    const packId = READING_PACK_ORDER[next.readingRound];
+    if (packId) {
+      const pack = packById(packId);
+      const already = pack?.images.every((i) => next.unlockedImages.includes(i.id));
+      if (pack && !already) {
+        next = unlockPackImages(next, packId);
+        packUnlocked = packId;
+      }
     }
+    roundComplete = true;
+    next = {
+      ...next,
+      readingRound: Math.min(READING_PACK_ORDER.length, next.readingRound + 1),
+      reading: emptyReading(),
+    };
   }
 
-  return {
-    state: next,
-    packUnlocked,
-    nivelCompleto: justFinishedLevel,
-    nextLevel: justFinishedLevel ? nextReadingLevel(level) : null,
-  };
+  return { state: next, packUnlocked, roundComplete };
 }
 
 export type MathAnswerResult = {
@@ -279,18 +283,14 @@ export function nextUnlockSummary(state: ProgressState): {
   progress: number;
   target: number;
 } {
-  const readingOrder: ReadingLevelId[] = ["letras", "silabas", "palabras", "frases"];
-  for (const lvl of readingOrder) {
-    const packId = READING_PACK_BY_LEVEL[lvl];
-    if (packId && !isPackFullyUnlocked(state, packId)) {
-      const done = state.reading[lvl].done.length;
-      return {
-        title: "Siguiente libro (lectura)",
-        detail: packById(packId)?.name ?? "",
-        progress: Math.min(3, done),
-        target: 3,
-      };
-    }
+  const nextPack = nextReadingPackId(state);
+  if (nextPack && !isPackFullyUnlocked(state, nextPack)) {
+    return {
+      title: "Siguiente libro (lectura)",
+      detail: `${packById(nextPack)?.name ?? "Libro"} · 5 puntos en cada sección`,
+      progress: totalReadingPoints(state),
+      target: READING_POINTS_TO_PASS,
+    };
   }
 
   const m = state.math;
@@ -334,7 +334,7 @@ export function nextUnlockSummary(state: ProgressState): {
 
 export function subscribeProgress(onChange: () => void): () => void {
   const handler = (e: StorageEvent) => {
-    if (e.key?.startsWith("akemi-progress-v3-") || e.key === "akemi-profiles-v1") onChange();
+    if (e.key?.startsWith("akemi-progress-v4-") || e.key === "akemi-profiles-v1") onChange();
   };
   window.addEventListener("storage", handler);
   const custom = () => onChange();

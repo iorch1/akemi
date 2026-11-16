@@ -1,3 +1,154 @@
+.dibujo-header {
+  margin-bottom: 0.75rem;
+}
+
+.dibujo-paint-layout {
+  display: grid;
+  grid-template-columns: minmax(7.5rem, 11rem) 1fr;
+  gap: 0.75rem;
+  align-items: start;
+}
+
+@media (max-width: 640px) {
+  .dibujo-paint-layout {
+    grid-template-columns: 1fr;
+  }
+}
+
+.dibujo-sidebar {
+  max-height: min(72dvh, 560px);
+  overflow-y: auto;
+  padding: 0.65rem;
+}
+
+.dibujo-sidebar-title {
+  margin: 0 0 0.5rem;
+  font-weight: 800;
+  font-size: 0.9rem;
+}
+
+.dibujo-sidebar-hint {
+  margin: 0;
+  font-size: 0.78rem;
+  opacity: 0.8;
+  line-height: 1.35;
+}
+
+.dibujo-pack-list,
+.dibujo-page-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.dibujo-pack-btn,
+.dibujo-page-btn {
+  width: 100%;
+  text-align: left;
+  border: 2px solid rgba(11, 58, 74, 0.1);
+  background: #fff;
+  border-radius: 0.65rem;
+  padding: 0.4rem 0.45rem;
+  font-weight: 700;
+  font-size: 0.78rem;
+  cursor: pointer;
+  margin-bottom: 0.35rem;
+}
+
+.dibujo-pack-btn.active,
+.dibujo-page-btn.active {
+  border-color: var(--coral);
+  box-shadow: 0 0 0 1px rgba(255, 107, 107, 0.25);
+}
+
+.dibujo-page-list {
+  padding-left: 0.35rem;
+  margin-bottom: 0.5rem;
+}
+
+.dibujo-workspace {
+  min-width: 0;
+}
+
+.dibujo-main-toolbar {
+  margin-bottom: 0.65rem;
+}
+
+.tool-family-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.45rem;
+  justify-content: center;
+  margin-bottom: 0.5rem;
+}
+
+.tool-family {
+  position: relative;
+}
+
+.tool-family-btn {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 0.45rem 0.65rem;
+  border-radius: 0.75rem;
+  border: 2px solid rgba(11, 58, 74, 0.12);
+  background: #fff;
+  font-weight: 800;
+  font-size: 0.82rem;
+  cursor: pointer;
+}
+
+.tool-family-btn.active {
+  border-color: var(--leaf);
+}
+
+.tool-family-caret {
+  font-size: 0.65rem;
+  opacity: 0.7;
+}
+
+.tool-family-menu {
+  position: absolute;
+  z-index: 5;
+  top: calc(100% + 0.25rem);
+  left: 0;
+  min-width: 9rem;
+  background: #fff;
+  border-radius: 0.75rem;
+  box-shadow: var(--shadow);
+  border: 2px solid rgba(11, 58, 74, 0.1);
+  padding: 0.35rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+}
+
+.tool-family-menu button {
+  border: none;
+  background: transparent;
+  text-align: left;
+  padding: 0.4rem 0.5rem;
+  border-radius: 0.5rem;
+  font-weight: 700;
+  font-size: 0.78rem;
+  cursor: pointer;
+}
+
+.tool-family-menu button.active,
+.tool-family-menu button:hover {
+  background: rgba(46, 196, 182, 0.15);
+}
+
+.dibujo-canvas-area {
+  display: flex;
+  justify-content: center;
+}
+
+.dibujo-canvas-area.free {
+  justify-content: stretch;
+}
+
 .dibujo-template-scroll {
   flex-wrap: wrap;
   max-height: 7rem;

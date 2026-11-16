@@ -3,11 +3,15 @@ import { BackButton } from "../components/BackButton";
 import { useProfileContext } from "../context/ProfileContext";
 import { useProgress } from "../hooks/useProgress";
 import { difficultyForAge, difficultyLabel } from "../lib/difficulty";
-import { packById, READING_PACK_BY_LEVEL } from "../lib/coloring-packs";
+import { packById } from "../lib/coloring-packs";
 import {
   completeReadingChallenge,
-  nextReadingLevel,
+  nextReadingPackId,
+  READING_POINTS_PER_SECTION,
+  READING_POINTS_TO_PASS,
   readingLevelNumber,
+  readingSectionPoints,
+  totalReadingPoints,
   type ReadingLevelId,
 } from "../lib/progress";
 import { challengesFor, distractorsFor } from "../lib/reading-challenges";
@@ -34,6 +38,10 @@ export function Leer() {
   const challenges = useMemo(() => challengesFor(level, difficulty), [level, difficulty]);
   const current = challenges[challengeSlot] ?? challenges[0];
   const done = progress.reading[level].done;
+  const sectionPts = readingSectionPoints(progress, level);
+  const totalPts = totalReadingPoints(progress);
+  const nextPack = nextReadingPackId(progress);
+  const nextPackName = nextPack ? packById(nextPack)?.name : null;
 
   const choices = useMemo(
     () => distractorsFor(level, current.correct),
@@ -71,11 +79,11 @@ export function Leer() {
   }
 
   function choose(opt: string) {
-    if (done.includes(current.index)) return;
+    if (done.includes(current.index) || sectionPts >= READING_POINTS_PER_SECTION) return;
     if (opt === current.correct) {
       setFeedback("¡Muy bien!");
       speak("¡Muy bien!", { mode: "feedback" });
-      const { state, packUnlocked, nivelCompleto, nextLevel } = completeReadingChallenge(
+      const { state, packUnlocked, roundComplete } = completeReadingChallenge(
         progress,
         level,
         current.index,
@@ -86,17 +94,14 @@ export function Leer() {
         setToast(`¡Nuevo libro desbloqueado: ${name}! 🎨`);
         speak(`¡Desbloqueaste ${name}!`, { mode: "feedback" });
       }
-      if (nivelCompleto) {
-        const n = readingLevelNumber(level);
-        const msg = `¡Nivel ${n} completado!`;
+      if (roundComplete) {
+        const msg = "¡Nivel completado! 20 de 20 puntos";
         setCelebrate(msg);
-        speak(msg, { mode: "feedback" });
+        speak("¡Nivel completado!", { mode: "feedback" });
         setTimeout(() => {
           setCelebrate(null);
-          if (nextLevel) {
-            setLevel(nextLevel);
-          }
-        }, 2200);
+          setLevel("letras");
+        }, 2600);
       }
       setTimeout(() => {
         setFeedback("");
@@ -104,15 +109,12 @@ export function Leer() {
           (c) => !state.reading[level].done.includes(c.index),
         );
         if (remaining >= 0) setChallengeSlot(remaining);
-      }, nivelCompleto ? 2300 : 700);
+      }, roundComplete ? 2700 : 700);
     } else {
       setFeedback("Inténtalo otra vez");
       speak("Inténtalo otra vez", { mode: "feedback" });
     }
   }
-
-  const packId = READING_PACK_BY_LEVEL[level];
-  const packName = packId ? packById(packId)?.name : "";
 
   return (
     <main className="screen leer">
@@ -122,36 +124,35 @@ export function Leer() {
       <div className="panel">
         <h1 className="section-title">Aprender a leer</h1>
         <p className="section-sub">
-          3 aciertos desbloquean un libro · 5 aciertos completan el nivel y avanzan · Dificultad:{" "}
-          {difficultyLabel(difficulty)}
+          Gana 5 puntos en cada sección (20 en total) para desbloquear el siguiente libro · Solo
+          cuentan los aciertos · Dificultad: {difficultyLabel(difficulty)}
         </p>
 
-        <div className="level-pills" role="tablist" aria-label="Nivel">
+        <p className="leer-total-score" aria-live="polite">
+          Puntos totales: <strong>{totalPts}</strong> / {READING_POINTS_TO_PASS}
+          {nextPackName ? ` · Próximo libro: ${nextPackName}` : ""}
+        </p>
+
+        <div className="level-pills" role="tablist" aria-label="Sección">
           {LEVELS.map((l) => {
-            const complete = progress.reading[l.id].nivelCompleto;
+            const pts = readingSectionPoints(progress, l.id);
+            const full = pts >= READING_POINTS_PER_SECTION;
             return (
               <button
                 key={l.id}
                 type="button"
-                className={`level-pill ${level === l.id ? "active" : ""} ${complete ? "level-done" : ""}`}
+                className={`level-pill ${level === l.id ? "active" : ""} ${full ? "level-done" : ""}`}
                 onClick={() => setLevel(l.id)}
               >
-                {l.label}
-                {complete ? " ✓" : ""}
+                {l.label} {pts}/{READING_POINTS_PER_SECTION}
+                {full ? " ✓" : ""}
               </button>
             );
           })}
         </div>
-        <p className="leer-level-badge">Estás en el nivel {readingLevelNumber(level)} de 4</p>
+        <p className="leer-level-badge">Sección {readingLevelNumber(level)} de 4</p>
 
-        {packName && (
-          <p className="leer-pack-hint">
-            Pack «{packName}»: retos completados{" "}
-            <strong>{Math.min(3, done.length)}</strong>/3 (máx. 5 retos)
-          </p>
-        )}
-
-        <ul className="leer-challenge-dots" aria-label="Retos del nivel">
+        <ul className="leer-challenge-dots" aria-label="Retos de la sección">
           {challenges.map((c) => (
             <li
               key={c.index}
@@ -168,7 +169,8 @@ export function Leer() {
             🔊 Escuchar
           </button>
           <p className="leer-hint" aria-live="polite">
-            Reto {current.index + 1} de 5 · Elige la respuesta correcta
+            Puntos en esta sección: {sectionPts}/{READING_POINTS_PER_SECTION} · Elige la respuesta
+            correcta
           </p>
           <div className="leer-choices">
             {choices.map((c) => (
@@ -187,11 +189,6 @@ export function Leer() {
                 🎉⭐🌈
               </span>
               <p>{celebrate}</p>
-              {nextReadingLevel(level) && (
-                <p className="leer-celebrate-next">
-                  Siguiente: {LEVELS.find((l) => l.id === nextReadingLevel(level))?.label}
-                </p>
-              )}
             </div>
           )}
         </div>
