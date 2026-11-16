@@ -10,6 +10,23 @@ La misma app web (Vite + React) va dentro de un contenedor **Capacitor** para An
 
 ## Instalar el APK (sideload)
 
+### Desde la web (recomendado)
+
+En **Inicio** aparece el botón **Descargar app Android (APK)**. El archivo se sirve en la misma URL que la web:
+
+- Local: `http://127.0.0.1:5173/akemi-android.apk`
+- Producción: `https://cloud.akhio.com/akemi/akemi-android.apk`
+
+Para publicar el APK junto al sitio:
+
+```bash
+npm run android:build
+npm run apk:stage    # copia a public/akemi-android.apk
+npm run build:cloud  # incluye el APK en dist/
+```
+
+### Compilar a mano
+
 1. Compila: `npm run android:build`
 2. APK de depuración: `android/app/build/outputs/apk/debug/app-debug.apk`
 3. En el teléfono: activa **Orígenes desconocidos** / instalar apps desconocidas.

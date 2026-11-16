@@ -1,4 +1,5 @@
 import type { StageGoal } from "./curriculum";
+import type { StageWall } from "./obstacles";
 import type { SpriteState } from "./runtime";
 
 function starShape(ctx: CanvasRenderingContext2D, cx: number, cy: number, outer: number, points: number) {
@@ -70,37 +71,84 @@ export function drawStageGoals(
   }
 }
 
+/** Muñeco infantil «Aki» (no estrella ni emoji). */
 export function drawAkemiSprite(ctx: CanvasRenderingContext2D, st: SpriteState) {
   ctx.save();
   ctx.translate(st.x, st.y);
   ctx.rotate((st.heading * Math.PI) / 180);
 
-  ctx.fillStyle = "#7b4dff";
-  ctx.strokeStyle = "#4527a8";
-  ctx.lineWidth = 2;
-  starShape(ctx, 0, 0, 26, 5);
+  ctx.fillStyle = "#ff8fab";
+  roundRectPath(ctx, -11, 4, 22, 18, 8);
   ctx.fill();
+  ctx.strokeStyle = "#c9184a";
+  ctx.lineWidth = 1.5;
   ctx.stroke();
 
-  ctx.fillStyle = "#fff";
-  ctx.beginPath();
-  ctx.arc(6, -4, 4, 0, Math.PI * 2);
-  ctx.arc(14, -4, 4, 0, Math.PI * 2);
+  ctx.fillStyle = "#ffcad4";
+  roundRectPath(ctx, -9, -18, 18, 22, 9);
   ctx.fill();
-  ctx.fillStyle = "#2d1b69";
-  ctx.beginPath();
-  ctx.arc(7, -4, 2, 0, Math.PI * 2);
-  ctx.arc(15, -4, 2, 0, Math.PI * 2);
-  ctx.fill();
+  ctx.strokeStyle = "#c9184a";
+  ctx.stroke();
 
+  ctx.fillStyle = "#4a4e69";
   ctx.beginPath();
-  ctx.moveTo(-18, 12);
-  ctx.lineTo(-8, 18);
-  ctx.lineTo(-4, 8);
-  ctx.fillStyle = "#9d7aff";
+  ctx.arc(-4, -10, 2.2, 0, Math.PI * 2);
+  ctx.arc(4, -10, 2.2, 0, Math.PI * 2);
   ctx.fill();
+  ctx.strokeStyle = "#fff";
+  ctx.lineWidth = 1;
+  ctx.beginPath();
+  ctx.arc(0, -4, 3.5, 0.15, Math.PI - 0.15);
+  ctx.stroke();
+
+  ctx.fillStyle = "#5c677d";
+  ctx.fillRect(-14, 8, 6, 10);
+  ctx.fillRect(8, 8, 6, 10);
+  ctx.fillStyle = "#4361ee";
+  ctx.fillRect(-12, 20, 7, 5);
+  ctx.fillRect(5, 20, 7, 5);
 
   ctx.restore();
+}
+
+function roundRectPath(
+  ctx: CanvasRenderingContext2D,
+  x: number,
+  y: number,
+  w: number,
+  h: number,
+  r: number,
+) {
+  ctx.beginPath();
+  ctx.moveTo(x + r, y);
+  ctx.arcTo(x + w, y, x + w, y + h, r);
+  ctx.arcTo(x + w, y + h, x, y + h, r);
+  ctx.arcTo(x, y + h, x, y, r);
+  ctx.arcTo(x, y, x + w, y, r);
+  ctx.closePath();
+}
+
+/** Paredes u obstáculos del nivel. */
+export function drawStageWalls(ctx: CanvasRenderingContext2D, walls: StageWall[]) {
+  for (const wall of walls) {
+    const g = ctx.createLinearGradient(wall.x, wall.y, wall.x, wall.y + wall.h);
+    g.addColorStop(0, "#b08968");
+    g.addColorStop(1, "#7f5539");
+    ctx.fillStyle = g;
+    ctx.strokeStyle = "#6f4e37";
+    ctx.lineWidth = 2;
+    roundRectPath(ctx, wall.x, wall.y, wall.w, wall.h, 6);
+    ctx.fill();
+    ctx.stroke();
+    ctx.strokeStyle = "rgba(255,255,255,0.18)";
+    ctx.lineWidth = 1;
+    for (let row = wall.y + 10; row < wall.y + wall.h; row += 14) {
+      ctx.beginPath();
+      ctx.moveTo(wall.x + 4, row);
+      ctx.lineTo(wall.x + wall.w - 4, row);
+      ctx.stroke();
+    }
+  }
 }
 
 export function roundRect(

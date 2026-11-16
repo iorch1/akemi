@@ -4,6 +4,7 @@ import { useProfileContext } from "../context/ProfileContext";
 import { useProgress } from "../hooks/useProgress";
 import { difficultyForAge, difficultyLabel } from "../lib/difficulty";
 import { avatarEmoji } from "../lib/profiles";
+import { ANDROID_APK_LABEL, androidApkDownloadUrl } from "../lib/android-download";
 import { countUnlockedImages, nextUnlockSummary, totalImages } from "../lib/progress";
 import "./Home.css";
 
@@ -74,6 +75,16 @@ export function Home() {
         <h1 className="brand-mark home-brand">Akemi</h1>
         <p className="home-tagline">Aprende, calcula y colorea los libros Robcrea</p>
         <p className="home-cta-hint">Elige una aventura</p>
+        <a
+          className="home-android-download btn btn-sky"
+          href={androidApkDownloadUrl()}
+          download="akemi-android.apk"
+        >
+          📱 {ANDROID_APK_LABEL}
+        </a>
+        <p className="home-android-hint">
+          Instala en el teléfono (Android). Si pide permiso, permite orígenes desconocidos.
+        </p>
       </header>
 
       <nav className="home-grid home-grid-primary" aria-label="Secciones principales">
