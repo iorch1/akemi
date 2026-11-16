@@ -2,8 +2,8 @@
 
 App educativa infantil en español (leer, matemáticas, juegos, dibujo y Crear).
 
-- **Dibujo:** paleta y herramientas a la izquierda, plantillas a la derecha y lienzo grande en el centro (la pintura por página sigue en memoria de sesión).
-- **Crear:** bloques tipo Hora del Código; **Reproducir** anima a Aki en el escenario (mover, girar, esperar, decir, repetir).
+- **Dibujo:** paleta y herramientas a la izquierda, plantillas a la derecha; el mezclador HSV va **encima del lienzo** (la pintura por página sigue en memoria de sesión).
+- **Crear:** currículo de **15 niveles** (metas estrella/gemas, progreso por perfil); bloques Hora del Código y **Reproducir** para animar a Aki.
 
 - **Web:** `npm run dev` → http://127.0.0.1:5173/
 - **Android APK:** ver [docs/ANDROID.md](./docs/ANDROID.md)
