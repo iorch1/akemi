@@ -48,7 +48,7 @@ const sections = [
   {
     to: "/crear",
     title: "Crear",
-    desc: "Bloques y Hora del Código",
+    desc: "Platformer con bloques · 15 niveles",
     emoji: "🧩",
     className: "tile-crear",
   },

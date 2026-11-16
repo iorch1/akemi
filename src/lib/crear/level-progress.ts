@@ -1,8 +1,15 @@
-import { CREAR_CURRICULUM, FIRST_LEVEL_ID, nextLevelId } from "./curriculum";
+import {
+  allLevelsComplete,
+  CREAR_CURRICULUM,
+  FIRST_LEVEL_ID,
+  nextLevelId,
+} from "./curriculum";
 
 export type CrearLevelProgress = {
   completedLevelIds: string[];
   activeLevelId: string;
+  /** Desbloqueado al completar los 15 niveles (modo libre Game Boy). */
+  freePlayUnlocked: boolean;
 };
 
 const EVENT = "akemi-crear-levels";
@@ -12,7 +19,11 @@ function key(profileId: string) {
 }
 
 export function defaultCrearLevelProgress(): CrearLevelProgress {
-  return { completedLevelIds: [], activeLevelId: FIRST_LEVEL_ID };
+  return {
+    completedLevelIds: [],
+    activeLevelId: FIRST_LEVEL_ID,
+    freePlayUnlocked: false,
+  };
 }
 
 export function loadCrearLevelProgress(profileId: string): CrearLevelProgress {
@@ -20,15 +31,22 @@ export function loadCrearLevelProgress(profileId: string): CrearLevelProgress {
   try {
     const raw = localStorage.getItem(key(profileId));
     if (!raw) return defaultCrearLevelProgress();
-    const parsed = JSON.parse(raw) as CrearLevelProgress;
-    const active =
-      CREAR_CURRICULUM.some((l) => l.id === parsed.activeLevelId)
-        ? parsed.activeLevelId
-        : FIRST_LEVEL_ID;
+    const parsed = JSON.parse(raw) as Partial<CrearLevelProgress>;
     const completed = (parsed.completedLevelIds ?? []).filter((id) =>
       CREAR_CURRICULUM.some((l) => l.id === id),
     );
-    return { completedLevelIds: completed, activeLevelId: active };
+    const unlocked = Boolean(parsed.freePlayUnlocked) || allLevelsComplete(completed);
+    const active =
+      parsed.activeLevelId === "free" && unlocked
+        ? "free"
+        : CREAR_CURRICULUM.some((l) => l.id === parsed.activeLevelId)
+          ? (parsed.activeLevelId as string)
+          : FIRST_LEVEL_ID;
+    return {
+      completedLevelIds: completed,
+      activeLevelId: active,
+      freePlayUnlocked: unlocked,
+    };
   } catch {
     return defaultCrearLevelProgress();
   }
@@ -41,6 +59,7 @@ export function saveCrearLevelProgress(profileId: string, progress: CrearLevelPr
 }
 
 export function isLevelUnlocked(progress: CrearLevelProgress, levelId: string): boolean {
+  if (levelId === "free") return progress.freePlayUnlocked;
   const idx = CREAR_CURRICULUM.findIndex((l) => l.id === levelId);
   if (idx <= 0) return true;
   const prev = CREAR_CURRICULUM[idx - 1];
@@ -52,17 +71,22 @@ export function markLevelComplete(
   levelId: string,
 ): CrearLevelProgress {
   const prev = loadCrearLevelProgress(profileId);
+  if (levelId === "free") return prev;
   const completed = prev.completedLevelIds.includes(levelId)
     ? prev.completedLevelIds
     : [...prev.completedLevelIds, levelId];
+  const freePlayUnlocked = allLevelsComplete(completed);
   const next = nextLevelId(levelId);
   const active =
-    next && isLevelUnlocked({ ...prev, completedLevelIds: completed }, next)
+    next && isLevelUnlocked({ ...prev, completedLevelIds: completed, freePlayUnlocked }, next)
       ? next
-      : levelId;
+      : freePlayUnlocked && !next
+        ? "free"
+        : levelId;
   const nextProgress: CrearLevelProgress = {
     completedLevelIds: completed,
     activeLevelId: active,
+    freePlayUnlocked,
   };
   saveCrearLevelProgress(profileId, nextProgress);
   return nextProgress;
