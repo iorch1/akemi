@@ -41,8 +41,23 @@ import "./Rompecabezas.css";
 const BOARD_W = 400;
 const BOARD_H = 520;
 const MAX_UNDO = 24;
+const RETURN_MS = 280;
 
 type Phase = "hub" | "play" | "paint";
+
+type DragState = {
+  pieceId: number;
+  pointerId: number;
+  x: number;
+  y: number;
+  offsetX: number;
+  offsetY: number;
+  width: number;
+  height: number;
+  homeX: number;
+  homeY: number;
+  returning: boolean;
+};
 
 function useCanvasUndo(canvasRef: React.RefObject<HTMLCanvasElement | null>) {
   const stack = useRef<ImageData[]>([]);
@@ -176,17 +191,25 @@ export function Rompecabezas() {
   const [tray, setTray] = useState<number[]>(saved?.tray ?? []);
   const [board, setBoard] = useState<(number | null)[]>(saved?.board ?? []);
   const [, setJigsaw] = useState<PuzzleJigsawInfo | null>(saved?.jigsaw ?? null);
-  const [selectedPiece, setSelectedPiece] = useState<number | null>(null);
   const [loading, setLoading] = useState(false);
   const [shakeSlot, setShakeSlot] = useState<number | null>(null);
   const [placedFlash, setPlacedFlash] = useState<number | null>(null);
+  const [hoverSlot, setHoverSlot] = useState<number | null>(null);
+  const [drag, setDrag] = useState<DragState | null>(null);
   const [color, setColor] = useState("#ff6b6b");
   const mixer = useColorMixerState();
   const paintRef = useRef<HTMLCanvasElement>(null);
   const paintUndo = useCanvasUndo(paintRef);
   const paintReady = useRef(false);
   const winRecorded = useRef(saved?.winRecorded ?? false);
-  const dragPiece = useRef<number | null>(null);
+  const dragRef = useRef<DragState | null>(null);
+  const boardRef = useRef<HTMLDivElement>(null);
+  const trayHomeRefs = useRef<Map<number, HTMLButtonElement>>(new Map());
+
+  const setDragState = useCallback((next: DragState | null) => {
+    dragRef.current = next;
+    setDrag(next);
+  }, []);
 
   const phase = phaseFromParam(phaseParam);
   const grid = useMemo(() => gridForPieceCount(pieceCount), [pieceCount]);
@@ -241,7 +264,8 @@ export function Rompecabezas() {
   const startGame = useCallback(
     async (count: PuzzlePieceCount, img: ColoringImage) => {
       setLoading(true);
-      setSelectedPiece(null);
+      setDragState(null);
+      setHoverSlot(null);
       winRecorded.current = false;
       paintReady.current = false;
       const g = gridForPieceCount(count);
@@ -293,7 +317,7 @@ export function Rompecabezas() {
         setLoading(false);
       }
     },
-    [navigate, profile?.id],
+    [navigate, profile?.id, setDragState],
   );
 
   const onStartRandom = useCallback(() => {
@@ -309,12 +333,12 @@ export function Rompecabezas() {
   }, [image?.id, pieceCount, progress.unlockedImages, startGame]);
 
   const placePiece = useCallback(
-    (slot: number, pieceId: number) => {
-      if (board[slot] !== null) return;
+    (slot: number, pieceId: number): boolean => {
+      if (board[slot] !== null) return false;
       if (pieceId !== slot) {
         setShakeSlot(slot);
         window.setTimeout(() => setShakeSlot(null), 420);
-        return;
+        return false;
       }
       setBoard((prev) => {
         const next = [...prev];
@@ -327,34 +351,130 @@ export function Rompecabezas() {
         syncSession({ tray: next });
         return next;
       });
-      setSelectedPiece(null);
       setPlacedFlash(slot);
       window.setTimeout(() => setPlacedFlash(null), 380);
+      return true;
     },
     [board, syncSession],
   );
 
-  const onTrayTap = (pieceId: number) => {
-    setSelectedPiece((cur) => (cur === pieceId ? null : pieceId));
+  const slotAtPoint = useCallback((clientX: number, clientY: number): number | null => {
+    const boardEl = boardRef.current;
+    if (!boardEl) return null;
+    const prev = dragRef.current;
+    // Temporalmente ignoramos la pieza flotante en hit-test
+    const floating = document.querySelector(".puzzle-drag-layer") as HTMLElement | null;
+    if (floating) floating.style.pointerEvents = "none";
+    const hit = document.elementFromPoint(clientX, clientY);
+    if (floating) floating.style.pointerEvents = "none";
+    void prev;
+    const slotEl = hit?.closest?.("[data-slot]") as HTMLElement | null;
+    if (!slotEl || !boardEl.contains(slotEl)) return null;
+    const raw = slotEl.getAttribute("data-slot");
+    if (raw == null) return null;
+    const slot = Number(raw);
+    return Number.isFinite(slot) ? slot : null;
+  }, []);
+
+  const returnDragHome = useCallback(
+    (current: DragState) => {
+      const homeBtn = trayHomeRefs.current.get(current.pieceId);
+      const homeRect = homeBtn?.getBoundingClientRect();
+      const next: DragState = {
+        ...current,
+        returning: true,
+        x: homeRect?.left ?? current.homeX,
+        y: homeRect?.top ?? current.homeY,
+        width: homeRect?.width ?? current.width,
+        height: homeRect?.height ?? current.height,
+      };
+      setDragState(next);
+      window.setTimeout(() => {
+        if (dragRef.current?.pieceId === current.pieceId) {
+          setDragState(null);
+          setHoverSlot(null);
+        }
+      }, RETURN_MS + 40);
+    },
+    [setDragState],
+  );
+
+  const onPiecePointerDown = (pieceId: number, e: React.PointerEvent<HTMLButtonElement>) => {
+    if (e.button !== 0 && e.pointerType === "mouse") return;
+    if (dragRef.current) return;
+    e.preventDefault();
+    e.stopPropagation();
+    const btn = e.currentTarget;
+    btn.setPointerCapture(e.pointerId);
+    const rect = btn.getBoundingClientRect();
+    const next: DragState = {
+      pieceId,
+      pointerId: e.pointerId,
+      x: rect.left,
+      y: rect.top,
+      offsetX: e.clientX - rect.left,
+      offsetY: e.clientY - rect.top,
+      width: rect.width,
+      height: rect.height,
+      homeX: rect.left,
+      homeY: rect.top,
+      returning: false,
+    };
+    setDragState(next);
+    document.body.classList.add("puzzle-dragging");
   };
 
-  const onSlotTap = (slot: number) => {
-    if (selectedPiece === null) return;
-    placePiece(slot, selectedPiece);
+  const onPiecePointerMove = (e: React.PointerEvent<HTMLButtonElement>) => {
+    const current = dragRef.current;
+    if (!current || current.returning || current.pointerId !== e.pointerId) return;
+    e.preventDefault();
+    const x = e.clientX - current.offsetX;
+    const y = e.clientY - current.offsetY;
+    const next = { ...current, x, y };
+    dragRef.current = next;
+    setDrag(next);
+    const slot = slotAtPoint(e.clientX, e.clientY);
+    setHoverSlot(slot);
   };
 
-  const onPiecePointerDown = (pieceId: number, e: React.PointerEvent) => {
-    e.currentTarget.setPointerCapture(e.pointerId);
-    dragPiece.current = pieceId;
-    setSelectedPiece(pieceId);
+  const onPiecePointerUp = (e: React.PointerEvent<HTMLButtonElement>) => {
+    const current = dragRef.current;
+    if (!current || current.pointerId !== e.pointerId) return;
+    e.preventDefault();
+    try {
+      e.currentTarget.releasePointerCapture(e.pointerId);
+    } catch {
+      /* already released */
+    }
+    document.body.classList.remove("puzzle-dragging");
+    if (current.returning) return;
+
+    const slot = slotAtPoint(e.clientX, e.clientY);
+    setHoverSlot(null);
+    if (slot !== null && board[slot] === null && slot === current.pieceId) {
+      placePiece(slot, current.pieceId);
+      setDragState(null);
+      return;
+    }
+    if (slot !== null && board[slot] === null && slot !== current.pieceId) {
+      setShakeSlot(slot);
+      window.setTimeout(() => setShakeSlot(null), 420);
+    }
+    returnDragHome(current);
   };
 
-  const onBoardPointerUp = (slot: number) => {
-    const pieceId = dragPiece.current ?? selectedPiece;
-    dragPiece.current = null;
-    if (pieceId === null) return;
-    placePiece(slot, pieceId);
+  const onPiecePointerCancel = (e: React.PointerEvent<HTMLButtonElement>) => {
+    const current = dragRef.current;
+    if (!current || current.pointerId !== e.pointerId) return;
+    document.body.classList.remove("puzzle-dragging");
+    returnDragHome(current);
   };
+
+  useEffect(() => {
+    return () => {
+      document.body.classList.remove("puzzle-dragging");
+    };
+  }, []);
 
   useEffect(() => {
     if (phase !== "play" || !isComplete || !image) return;
@@ -553,6 +673,7 @@ export function Rompecabezas() {
 
       <div className="puzzle-board-frame">
         <div
+          ref={boardRef}
           className="puzzle-board"
           style={{
             gridTemplateColumns: `repeat(${grid.cols}, 1fr)`,
@@ -564,21 +685,20 @@ export function Rompecabezas() {
             const tile = pieceId !== null ? tileById.get(pieceId) : null;
             const ghost = !tile ? tileById.get(slot) : null;
             return (
-              <button
+              <div
                 key={slot}
-                type="button"
                 data-slot={slot}
                 className={[
                   "puzzle-slot",
                   tile ? "puzzle-slot--filled" : "",
                   shakeSlot === slot ? "puzzle-slot--shake" : "",
                   placedFlash === slot ? "puzzle-slot--flash" : "",
+                  hoverSlot === slot && !tile ? "puzzle-slot--hover" : "",
                 ]
                   .filter(Boolean)
                   .join(" ")}
-                onClick={() => onSlotTap(slot)}
-                onPointerUp={() => onBoardPointerUp(slot)}
                 aria-label={tile ? `Pieza colocada ${slot + 1}` : `Hueco ${slot + 1}`}
+                role="listitem"
               >
                 {tile ? (
                   <img
@@ -601,29 +721,40 @@ export function Rompecabezas() {
                 ) : (
                   <span className="puzzle-slot-empty" />
                 )}
-              </button>
+              </div>
             );
           })}
         </div>
       </div>
 
       <div className="puzzle-tray" aria-label="Piezas sueltas">
-        <p className="puzzle-tray-label">Toca una pieza y luego el hueco correcto</p>
+        <p className="puzzle-tray-label">Arrastra cada pieza a su hueco</p>
         <div className="puzzle-tray-scroll">
           {tray.map((pieceId) => {
             const tile = tileById.get(pieceId);
             if (!tile) return null;
             const aspect =
               (tile.coreW + tile.padPx * 2) / (tile.coreH + tile.padPx * 2 || 1);
+            const isDragging = drag?.pieceId === pieceId;
             return (
               <button
                 key={pieceId}
                 type="button"
-                className={`puzzle-piece${selectedPiece === pieceId ? " selected" : ""}`}
+                ref={(el) => {
+                  if (el) trayHomeRefs.current.set(pieceId, el);
+                  else trayHomeRefs.current.delete(pieceId);
+                }}
+                className={[
+                  "puzzle-piece",
+                  isDragging ? "puzzle-piece--lifting" : "",
+                ]
+                  .filter(Boolean)
+                  .join(" ")}
                 style={{ aspectRatio: `${aspect}` }}
-                onClick={() => onTrayTap(pieceId)}
                 onPointerDown={(e) => onPiecePointerDown(pieceId, e)}
-                aria-pressed={selectedPiece === pieceId}
+                onPointerMove={onPiecePointerMove}
+                onPointerUp={onPiecePointerUp}
+                onPointerCancel={onPiecePointerCancel}
                 aria-label={`Pieza ${pieceId + 1}`}
               >
                 <img src={tile.dataUrl} alt="" draggable={false} />
@@ -632,6 +763,29 @@ export function Rompecabezas() {
           })}
         </div>
       </div>
+
+      {drag &&
+        (() => {
+          const tile = tileById.get(drag.pieceId);
+          if (!tile) return null;
+          return (
+            <div
+              className={`puzzle-drag-layer${drag.returning ? " puzzle-drag-layer--return" : ""}`}
+              style={{
+                left: drag.x,
+                top: drag.y,
+                width: drag.width,
+                height: drag.height,
+                transition: drag.returning
+                  ? `left ${RETURN_MS}ms ease, top ${RETURN_MS}ms ease, width ${RETURN_MS}ms ease, height ${RETURN_MS}ms ease`
+                  : undefined,
+              }}
+              aria-hidden
+            >
+              <img src={tile.dataUrl} alt="" draggable={false} />
+            </div>
+          );
+        })()}
     </main>
   );
 }
