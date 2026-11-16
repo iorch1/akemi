@@ -36,6 +36,13 @@ const sections = [
     emoji: "🎨",
     className: "tile-dibujo",
   },
+  {
+    to: "/crear",
+    title: "Crear",
+    desc: "Bloques para animar",
+    emoji: "🧩",
+    className: "tile-crear",
+  },
 ];
 
 export function Home() {

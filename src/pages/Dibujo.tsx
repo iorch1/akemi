@@ -85,7 +85,7 @@ function useCanvasUndo(canvasRef: React.RefObject<HTMLCanvasElement | null>) {
     stack.current = [];
   }, []);
 
-  return { snapshot, undo, resetStack, canUndo: () => stack.current.length > 0 };
+  return { snapshot, undo, resetStack };
 }
 
 export function Dibujo() {
@@ -115,8 +115,7 @@ export function Dibujo() {
 
   const activePackRow = unlockedByPack.find((r) => r.pack.id === packId) ?? unlockedByPack[0];
   const packPages = activePackRow?.pages ?? [];
-  const currentTemplate =
-    packPages.find((t) => t.id === templateId) ?? packPages[0];
+  const currentTemplate = packPages.find((t) => t.id === templateId) ?? packPages[0];
 
   useEffect(() => {
     if (!unlockedByPack.length) return;
@@ -234,35 +233,35 @@ export function Dibujo() {
     ctx.fillRect(0, 0, canvas.width, canvas.height);
   }
 
-  const lockedCount = COLORING_PACKS.flatMap((p) => p.images).length - progress.unlockedImages.length;
-  const packLabel = currentTemplate ? packForImage(currentTemplate.id)?.name : "";
+  const lockedCount =
+    COLORING_PACKS.flatMap((p) => p.images).length - progress.unlockedImages.length;
 
   const toolBar = (
-    <div className="dibujo-toolbar">
+    <div className="dibujo-toolbar dibujo-toolbar-compact">
       <button
         type="button"
-        className={`btn btn-ghost ${erasing ? "" : "tool-active"}`}
+        className={`btn btn-ghost btn-mini ${erasing ? "" : "tool-active"}`}
         onClick={() => setErasing(false)}
       >
         Pintar
       </button>
       <button
         type="button"
-        className={`btn ${erasing ? "btn-coral" : "btn-ghost"}`}
+        className={`btn btn-mini ${erasing ? "btn-coral" : "btn-ghost"}`}
         onClick={() => setErasing(true)}
       >
         Goma
       </button>
       <button
         type="button"
-        className="btn btn-ghost"
+        className="btn btn-ghost btn-mini"
         onClick={() => (mode === "colorear" ? colorUndo.undo() : freeUndo.undo())}
       >
-        ↩ Deshacer
+        ↩
       </button>
       <button
         type="button"
-        className="btn btn-leaf"
+        className="btn btn-leaf btn-mini"
         onClick={() => {
           if (mode === "colorear") void paintTemplate();
           else clearFree();
@@ -278,52 +277,43 @@ export function Dibujo() {
       <div className="back-row">
         <BackButton />
       </div>
-      <div className="panel">
-        <h1 className="section-title">Dibujo</h1>
-        <p className="section-sub">
-          {progress.unlockedImages.length} páginas listas
-          {lockedCount > 0 ? ` · ${lockedCount} más en lectura y mates` : ""}
-        </p>
+      <h1 className="dibujo-title-plain">Dibujo</h1>
+      <p className="dibujo-sub-plain">
+        {progress.unlockedImages.length} páginas listas
+        {lockedCount > 0 ? ` · ${lockedCount} más en lectura y mates` : ""}
+      </p>
 
-        <div className="level-pills">
-          <button
-            type="button"
-            className={`level-pill ${mode === "colorear" ? "active" : ""}`}
-            onClick={() => setMode("colorear")}
-          >
-            Colorear
-          </button>
-          <button
-            type="button"
-            className={`level-pill ${mode === "libre" ? "active" : ""}`}
-            onClick={() => setMode("libre")}
-          >
-            Lienzo libre
-          </button>
-        </div>
+      <div className="level-pills dibujo-mode-pills">
+        <button
+          type="button"
+          className={`level-pill ${mode === "colorear" ? "active" : ""}`}
+          onClick={() => setMode("colorear")}
+        >
+          Colorear
+        </button>
+        <button
+          type="button"
+          className={`level-pill ${mode === "libre" ? "active" : ""}`}
+          onClick={() => setMode("libre")}
+        >
+          Lienzo libre
+        </button>
+      </div>
 
-        <ColorPalette
-          color={color}
-          onColor={setColor}
-          onPick={() => setErasing(false)}
-        />
-
-        {toolBar}
-
-        {mode === "colorear" ? (
-          <>
-            {unlockedByPack.length === 0 ? (
-              <p className="dibujo-locked-msg">
-                Aún no hay páginas. Gana retos en Aprender a leer o Matemáticas.
-              </p>
+      <div className="dibujo-workspace">
+        <aside className="dibujo-sidebar panel-soft">
+          {mode === "colorear" ? (
+            unlockedByPack.length === 0 ? (
+              <p className="dibujo-locked-msg">Gana niveles en Leer o Matemáticas para más páginas.</p>
             ) : (
               <>
-                <div className="dibujo-template-scroll level-pills">
+                <p className="dibujo-side-title">Libros</p>
+                <div className="dibujo-side-scroll">
                   {unlockedByPack.map(({ pack }) => (
                     <button
                       key={pack.id}
                       type="button"
-                      className={`level-pill template-pill ${packId === pack.id ? "active" : ""}`}
+                      className={`dibujo-side-item ${packId === pack.id ? "active" : ""}`}
                       onClick={() => {
                         setPackId(pack.id);
                         const first = unlockedByPack.find((r) => r.pack.id === pack.id)?.pages[0];
@@ -334,60 +324,64 @@ export function Dibujo() {
                     </button>
                   ))}
                 </div>
-                <div className="dibujo-template-scroll level-pills dibujo-pages">
+                <p className="dibujo-side-title">Páginas</p>
+                <div className="dibujo-side-scroll dibujo-pages">
                   {packPages.map((t) => (
                     <button
                       key={t.id}
                       type="button"
-                      className={`level-pill template-pill ${templateId === t.id ? "active" : ""}`}
+                      className={`dibujo-side-item ${templateId === t.id ? "active" : ""}`}
                       onClick={() => setTemplateId(t.id)}
                     >
                       {t.label}
                     </button>
                   ))}
                 </div>
-                {packLabel && <p className="dibujo-pack-label">{packLabel}</p>}
-                <p className="dibujo-hint">
-                  {erasing ? "Toca una zona para borrar (blanco)" : "Toca una zona para rellenarla de color"}
-                </p>
-                <div className="canvas-frame">
-                  <canvas
-                    ref={colorCanvasRef}
-                    width={400}
-                    height={520}
-                    className="draw-canvas"
-                    onPointerDown={onColorPointer}
-                  />
-                </div>
               </>
-            )}
-          </>
-        ) : (
-          <>
-            <p className="dibujo-brush-title">Herramientas</p>
-            <div className="brush-preset-row">
+            )
+          ) : (
+            <>
+              <p className="dibujo-side-title">Herramientas</p>
               {BRUSH_PRESETS.map((p) => (
                 <button
                   key={p.id}
                   type="button"
-                  className={`brush-preset ${brushPreset.id === p.id ? "active" : ""}`}
+                  className={`dibujo-side-item ${brushPreset.id === p.id ? "active" : ""}`}
                   onClick={() => {
                     setBrushPreset(p);
                     setErasing(false);
                   }}
-                  title={p.label}
                 >
-                  {p.kind === "lapiz" ? "✏️" : p.kind === "plumon" ? "🖍️" : "🖌️"}
-                  <span>{p.label}</span>
+                  {p.kind === "lapiz" ? "✏️" : p.kind === "plumon" ? "🖍️" : "🖌️"} {p.label}
                 </button>
               ))}
+            </>
+          )}
+        </aside>
+
+        <section className="dibujo-canvas-area">
+          {mode === "colorear" && unlockedByPack.length > 0 && (
+            <p className="dibujo-hint">
+              {packForImage(currentTemplate?.id ?? "")?.name} ·{" "}
+              {erasing ? "Toca para borrar" : "Toca una zona para colorear"}
+            </p>
+          )}
+          {mode === "colorear" && unlockedByPack.length > 0 ? (
+            <div className="canvas-frame canvas-frame-large">
+              <canvas
+                ref={colorCanvasRef}
+                width={520}
+                height={680}
+                className="draw-canvas draw-canvas-large"
+                onPointerDown={onColorPointer}
+              />
             </div>
-            <p className="dibujo-hint">Lienzo grande: desliza para dibujar · desplázate para explorar</p>
-            <div className="free-scroll">
+          ) : mode === "libre" ? (
+            <div className="free-scroll free-scroll-large">
               <canvas
                 ref={freeCanvasRef}
-                width={1200}
-                height={900}
+                width={1400}
+                height={1000}
                 className="free-canvas"
                 onPointerDown={startFree}
                 onPointerMove={moveFree}
@@ -395,8 +389,13 @@ export function Dibujo() {
                 onPointerCancel={endFree}
               />
             </div>
-          </>
-        )}
+          ) : null}
+        </section>
+
+        <aside className="dibujo-palette-side panel-soft">
+          <ColorPalette color={color} onColor={setColor} onPick={() => setErasing(false)} compact />
+          {toolBar}
+        </aside>
       </div>
     </main>
   );

@@ -97,7 +97,7 @@ export function saveProfiles(store: ProfilesStore): void {
 }
 
 export function progressKey(profileId: string): string {
-  return `akemi-progress-v3-${profileId}`;
+  return `akemi-progress-v4-${profileId}`;
 }
 
 export function createProfile(nombre: string, edad: number, avatar: AvatarId): UserProfile {

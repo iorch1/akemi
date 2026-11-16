@@ -36,10 +36,10 @@ type LibroMeta = {
 
 const LIBRO_META: LibroMeta[] = [
   { numero: 1, emoji: "📗", name: "Libro 1", unlockHint: "Disponible desde el inicio" },
-  { numero: 2, emoji: "📘", name: "Libro 2", unlockHint: "Aprender a leer · Letras: acierta 3 de 5 retos" },
-  { numero: 3, emoji: "📙", name: "Libro 3", unlockHint: "Aprender a leer · Sílabas: acierta 3 de 5 retos" },
-  { numero: 4, emoji: "📕", name: "Libro 4", unlockHint: "Aprender a leer · Palabras: acierta 3 de 5 retos" },
-  { numero: 5, emoji: "📓", name: "Libro 5", unlockHint: "Aprender a leer · Frases: acierta 3 de 5 retos" },
+  { numero: 2, emoji: "📘", name: "Libro 2", unlockHint: "Aprender a leer · completa el nivel de camino 1 (20 puntos)" },
+  { numero: 3, emoji: "📙", name: "Libro 3", unlockHint: "Aprender a leer · completa el nivel de camino 2 (20 puntos)" },
+  { numero: 4, emoji: "📕", name: "Libro 4", unlockHint: "Aprender a leer · completa el nivel de camino 3 (20 puntos)" },
+  { numero: 5, emoji: "📓", name: "Libro 5", unlockHint: "Aprender a leer · completa el nivel de camino 4 (20 puntos)" },
   { numero: 6, emoji: "1️⃣", name: "Libro 6", unlockHint: "Matemáticas · nivel 1: racha de 5 aciertos" },
   { numero: 7, emoji: "2️⃣", name: "Libro 7", unlockHint: "Matemáticas · nivel 2: racha de 5 aciertos" },
   { numero: 8, emoji: "3️⃣", name: "Libro 8", unlockHint: "Matemáticas · nivel 3: racha de 5 aciertos" },
