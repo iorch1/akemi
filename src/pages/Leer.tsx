@@ -1,6 +1,10 @@
 import { useEffect, useMemo, useState } from "react";
 import { BackButton } from "../components/BackButton";
-import { speak } from "../utils/speech";
+import {
+  readingTextForLetter,
+  speak,
+  type SpeakMode,
+} from "../utils/speech";
 import "./Leer.css";
 
 type Level = "letras" | "silabas" | "palabras" | "frases";
@@ -89,19 +93,28 @@ export function Leer() {
   }
 
   function listen() {
-    speak(target, level === "frases" ? 0.85 : 0.8);
+    const mode: SpeakMode =
+      level === "letras"
+        ? "letter"
+        : level === "silabas"
+          ? "syllable"
+          : level === "palabras"
+            ? "word"
+            : "phrase";
+    const text = level === "letras" ? readingTextForLetter(target) : target;
+    speak(text, { mode });
   }
 
   function choose(opt: string) {
     if (opt === target) {
       setFeedback("¡Muy bien!");
       setStreak((s) => s + 1);
-      speak("¡Muy bien!");
+      speak("¡Muy bien!", { mode: "feedback" });
       setTimeout(nextItem, 700);
     } else {
       setFeedback("Inténtalo otra vez");
       setStreak(0);
-      speak("Inténtalo otra vez");
+      speak("Inténtalo otra vez", { mode: "feedback" });
     }
   }
 
