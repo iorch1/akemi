@@ -1,20 +1,21 @@
 {
   "name": "akemi",
   "private": true,
-  "version": "1.0.0",
+  "version": "1.0.1",
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "build": "tsc -b && vite build",
+    "build": "npm run build:cap",
+    "build:cap": "tsc -b && vite build --base=./",
     "build:cloud": "tsc -b && vite build --base=/akemi/",
     "lint": "oxlint",
     "preview": "vite preview",
-    "cap:sync": "npm run build && npx cap sync",
+    "cap:sync": "npm run build:cap && node scripts/verify-cap-bundle.mjs && npx cap sync",
     "android:open": "npx cap open android",
-    "android:build": "npm run cap:sync && cd android && ./gradlew assembleDebug",
-    "android:release": "npm run cap:sync && cd android && ./gradlew assembleRelease",
+    "android:build": "npm run cap:sync && node scripts/android-assemble.mjs assembleDebug",
+    "android:release": "npm run cap:sync && node scripts/android-assemble.mjs assembleRelease",
     "apk:stage": "node scripts/stage-android-apk.mjs",
-    "ota:bundle": "node scripts/publish-ota.mjs",
+    "ota:bundle": "npm run build:cap && node scripts/verify-cap-bundle.mjs && node scripts/publish-ota.mjs",
     "libros:ingest": "python3 scripts/ingest-robcrea-libros.py"
   },
   "dependencies": {

@@ -2,14 +2,15 @@
 /**
  * Empaqueta `dist/` en un zip OTA y actualiza ota/manifest.json (autocontenido en GitHub).
  *
- * Uso: npm run build && npm run ota:bundle
+ * Uso: npm run ota:bundle  (incluye build:cap + verify-cap-bundle)
  * Luego: git add ota && git push (el APK ya instalado descargará el zip nuevo al abrir).
  */
 import { execSync } from "node:child_process";
 import { mkdirSync, readFileSync, writeFileSync, rmSync, existsSync } from "node:fs";
-import { join } from "node:path";
+import { dirname, join } from "node:path";
+import { fileURLToPath } from "node:url";
 
-const root = new URL("..", import.meta.url).pathname;
+const root = join(dirname(fileURLToPath(import.meta.url)), "..");
 const pkg = JSON.parse(readFileSync(join(root, "package.json"), "utf8"));
 const version = process.env.OTA_VERSION?.trim() || pkg.version;
 const bundleId = process.env.OTA_BUNDLE_ID?.trim() || version;
@@ -27,9 +28,27 @@ if (!existsSync(join(root, "dist", "index.html"))) {
 mkdirSync(bundlesDir, { recursive: true });
 if (existsSync(zipPath)) rmSync(zipPath);
 
-execSync(`cd dist && zip -qr "${zipPath}" .`, { stdio: "inherit" });
+const distDir = join(root, "dist");
+const excludeApk =
+  process.platform === "win32"
+    ? `--exclude=akemi-android.apk`
+    : `-x akemi-android.apk`;
+if (process.platform === "win32") {
+  execSync(`tar -a -c ${excludeApk} -f "${zipPath}" -C "${distDir}" .`, {
+    stdio: "inherit",
+  });
+} else {
+  execSync(`cd "${distDir}" && zip -qr "${zipPath}" . ${excludeApk}`, {
+    stdio: "inherit",
+  });
+}
 
-const url = `https://raw.githubusercontent.com/iorch1/akemi/main/ota/bundles/${encodeURIComponent(zipName)}`;
+const defaultCdn = `https://cloud.akhio.com/akemi/ota/${encodeURIComponent(zipName)}`;
+const url =
+  process.env.OTA_BUNDLE_URL?.trim() ||
+  (process.env.OTA_USE_GITHUB_RAW === "1"
+    ? `https://raw.githubusercontent.com/iorch1/akemi/main/ota/bundles/${encodeURIComponent(zipName)}`
+    : defaultCdn);
 const manifest = {
   bundleId,
   version,

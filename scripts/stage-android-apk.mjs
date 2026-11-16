@@ -3,11 +3,16 @@
  * Copia el APK debug recién compilado a public/ para servirlo con la web.
  * Uso: npm run android:build && node scripts/stage-android-apk.mjs
  */
-import { copyFileSync, existsSync, mkdirSync } from "node:fs";
+import { copyFileSync, existsSync, mkdirSync, readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 
 const root = join(dirname(fileURLToPath(import.meta.url)), "..");
+const distIndex = join(root, "dist", "index.html");
+if (existsSync(distIndex) && readFileSync(distIndex, "utf8").includes("/akemi/")) {
+  console.error("dist/ tiene base /akemi/. Vuelve a compilar con: npm run android:build");
+  process.exit(1);
+}
 const src = join(root, "android/app/build/outputs/apk/debug/app-debug.apk");
 const dest = join(root, "public/akemi-android.apk");
 
