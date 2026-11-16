@@ -46,4 +46,25 @@ npm run build:cloud
 # rsync/scp a ~/akemi-web/dist/
 ```
 
-No hace falta recargar Apache si solo cambian assets.
+Tras cada `scp`/`rsync` a `dist/`, vuelve a fijar permisos (o ejecuta de nuevo el script enable):
+
+```bash
+find ~/akemi-web/dist -type d -exec chmod a+rx {} +
+find ~/akemi-web/dist -type f -exec chmod a+r {} +
+sudo restorecon -Rv ~/akemi-web/dist   # SELinux en RHEL/Fedora
+```
+
+## Página en blanco (HTML 200, JS/CSS 403)
+
+Causa habitual: `dist/assets/` sin bit de ejecución para «others» (Apache no puede entrar al directorio). El `index.html` en la raíz de `dist/` sigue en 200.
+
+```bash
+chmod o+x ~ ~/akemi-web
+find ~/akemi-web/dist -type d -exec chmod a+rx {} +
+find ~/akemi-web/dist -type f -exec chmod a+r {} +
+sudo restorecon -Rv ~/akemi-web/dist
+sudo bash ~/akemi-web/deploy/enable-akemi-cloud.sh
+curl -sI "$(curl -s https://cloud.akhio.com/akemi/ | sed -n 's/.*src=\"\([^\"]*\.js\)\".*/\1/p' | head -1 | sed 's|^|https://cloud.akhio.com|')" | head -1
+```
+
+Debe verse `HTTP/... 200` en el bundle `.js`. No hace falta recargar Apache si solo cambian assets y los permisos ya están bien.
