@@ -1,3 +1,5 @@
+import { Capacitor } from "@capacitor/core";
+import { LiveUpdate } from "@capawesome/capacitor-live-update";
 import { useEffect } from "react";
 import { Navigate, Route, Routes } from "react-router-dom";
 import { Layout } from "./components/Layout";
@@ -13,6 +15,9 @@ import { preloadVoices } from "./utils/speech";
 export default function App() {
   useEffect(() => {
     preloadVoices();
+    if (Capacitor.isNativePlatform()) {
+      void LiveUpdate.ready();
+    }
   }, []);
 
   return (
