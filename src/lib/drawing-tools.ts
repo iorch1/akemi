@@ -30,6 +30,12 @@ export type BrushPreset = {
   lineDash?: number[];
 };
 
+export const BRUSH_BY_KIND: Record<BrushKind, BrushPreset[]> = {
+  lapiz: [],
+  plumon: [],
+  brocha: [],
+};
+
 export const BRUSH_PRESETS: BrushPreset[] = [
   { id: "lapiz-fino", kind: "lapiz", label: "Lápiz fino", size: 3, opacity: 1 },
   { id: "lapiz-medio", kind: "lapiz", label: "Lápiz", size: 6, opacity: 1 },
@@ -41,6 +47,10 @@ export const BRUSH_PRESETS: BrushPreset[] = [
   { id: "brocha", kind: "brocha", label: "Brocha", size: 24, opacity: 0.45 },
   { id: "brocha-ancha", kind: "brocha", label: "Brocha ancha", size: 38, opacity: 0.4 },
 ];
+
+for (const preset of BRUSH_PRESETS) {
+  BRUSH_BY_KIND[preset.kind].push(preset);
+}
 
 export function hsvToHex(h: number, s: number, v: number): string {
   const c = v * s;
