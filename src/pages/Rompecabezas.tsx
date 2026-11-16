@@ -1,0 +1,535 @@
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useNavigate, useParams } from "react-router-dom";
+import { BackButton } from "../components/BackButton";
+import { ColorMixer, ColorSwatches, useColorMixerState } from "../components/ColorPalette";
+import { useProfileContext } from "../context/ProfileContext";
+import { useProgress } from "../hooks/useProgress";
+import type { ColoringImage } from "../lib/coloring-packs";
+import { packForImage } from "../lib/coloring-packs";
+import { hsvToHex } from "../lib/drawing-tools";
+import { floodFill } from "../lib/flood-fill";
+import {
+  PUZZLE_PIECE_COUNTS,
+  cellIndex,
+  gridForPieceCount,
+  shuffleInPlace,
+  type PuzzlePieceCount,
+} from "../lib/puzzle-grid";
+import { pickRandomColoringImage } from "../lib/puzzle-images";
+import {
+  getPuzzleSession,
+  patchPuzzleSession,
+  setPuzzleSession,
+  type PuzzleTile,
+} from "../lib/puzzle-session";
+import {
+  loadPuzzlePrefs,
+  recordPuzzleCompleted,
+  savePuzzlePrefs,
+} from "../lib/puzzle-storage";
+import { drawSvgOnCanvas } from "../lib/svg-canvas";
+import "./Rompecabezas.css";
+
+const BOARD_W = 400;
+const BOARD_H = 520;
+const MAX_UNDO = 24;
+
+type Phase = "hub" | "play" | "paint";
+
+function useCanvasUndo(canvasRef: React.RefObject<HTMLCanvasElement | null>) {
+  const stack = useRef<ImageData[]>([]);
+  const snapshot = useCallback(() => {
+    const canvas = canvasRef.current;
+    const ctx = canvas?.getContext("2d");
+    if (!canvas || !ctx) return;
+    stack.current.push(ctx.getImageData(0, 0, canvas.width, canvas.height));
+    if (stack.current.length > MAX_UNDO) stack.current.shift();
+  }, [canvasRef]);
+  const undo = useCallback(() => {
+    const canvas = canvasRef.current;
+    const ctx = canvas?.getContext("2d");
+    if (!canvas || !ctx || stack.current.length === 0) return;
+    ctx.putImageData(stack.current.pop()!, 0, 0);
+  }, [canvasRef]);
+  const resetStack = useCallback(() => {
+    stack.current = [];
+  }, []);
+  return { snapshot, undo, resetStack };
+}
+
+async function sliceImage(src: string, rows: number, cols: number): Promise<PuzzleTile[]> {
+  const canvas = document.createElement("canvas");
+  canvas.width = BOARD_W;
+  canvas.height = BOARD_H;
+  const ctx = canvas.getContext("2d");
+  if (!ctx) return [];
+  await drawSvgOnCanvas(ctx, src, BOARD_W, BOARD_H);
+
+  const pw = BOARD_W / cols;
+  const ph = BOARD_H / rows;
+  const tiles: PuzzleTile[] = [];
+  for (let r = 0; r < rows; r++) {
+    for (let c = 0; c < cols; c++) {
+      const piece = document.createElement("canvas");
+      piece.width = Math.max(1, Math.ceil(pw));
+      piece.height = Math.max(1, Math.ceil(ph));
+      const pctx = piece.getContext("2d");
+      if (!pctx) continue;
+      pctx.drawImage(canvas, c * pw, r * ph, pw, ph, 0, 0, piece.width, piece.height);
+      tiles.push({
+        id: cellIndex(r, c, cols),
+        row: r,
+        col: c,
+        dataUrl: piece.toDataURL("image/png"),
+      });
+    }
+  }
+  return tiles;
+}
+
+function canvasPointer(canvas: HTMLCanvasElement, clientX: number, clientY: number) {
+  const rect = canvas.getBoundingClientRect();
+  const x = ((clientX - rect.left) / rect.width) * canvas.width;
+  const y = ((clientY - rect.top) / rect.height) * canvas.height;
+  return { x, y };
+}
+
+function phaseFromParam(phaseParam?: string): Phase {
+  if (phaseParam === "jugar") return "play";
+  if (phaseParam === "pintar") return "paint";
+  return "hub";
+}
+
+export function Rompecabezas() {
+  const { phase: phaseParam } = useParams<{ phase?: string }>();
+  const navigate = useNavigate();
+  const { profile } = useProfileContext();
+  const [progress] = useProgress();
+  const prefs = useMemo(() => loadPuzzlePrefs(profile?.id), [profile?.id]);
+
+  const saved = getPuzzleSession();
+  const [pieceCount, setPieceCount] = useState<PuzzlePieceCount>(
+    saved?.pieceCount ?? prefs.lastPieceCount,
+  );
+  const [image, setImage] = useState<ColoringImage | null>(saved?.image ?? null);
+  const [tiles, setTiles] = useState<PuzzleTile[]>(saved?.tiles ?? []);
+  const [tray, setTray] = useState<number[]>(saved?.tray ?? []);
+  const [board, setBoard] = useState<(number | null)[]>(saved?.board ?? []);
+  const [selectedPiece, setSelectedPiece] = useState<number | null>(null);
+  const [loading, setLoading] = useState(false);
+  const [shakeSlot, setShakeSlot] = useState<number | null>(null);
+  const [placedFlash, setPlacedFlash] = useState<number | null>(null);
+  const [color, setColor] = useState("#ff6b6b");
+  const mixer = useColorMixerState();
+  const paintRef = useRef<HTMLCanvasElement>(null);
+  const paintUndo = useCanvasUndo(paintRef);
+  const paintReady = useRef(false);
+  const winRecorded = useRef(saved?.winRecorded ?? false);
+  const dragPiece = useRef<number | null>(null);
+
+  const phase = phaseFromParam(phaseParam);
+  const grid = useMemo(() => gridForPieceCount(pieceCount), [pieceCount]);
+  const placedCount = useMemo(() => board.filter((id) => id !== null).length, [board]);
+  const isComplete =
+    board.length > 0 && board.every((id, i) => id === i) && tray.length === 0;
+
+  useEffect(() => {
+    const immersive = phase === "play" || phase === "paint";
+    document.body.classList.toggle("puzzle-immersive", immersive);
+    return () => document.body.classList.remove("puzzle-immersive");
+  }, [phase]);
+
+  const syncSession = useCallback(
+    (
+      next: Partial<{
+        pieceCount: PuzzlePieceCount;
+        image: ColoringImage;
+        tiles: PuzzleTile[];
+        tray: number[];
+        board: (number | null)[];
+        winRecorded: boolean;
+      }>,
+    ) => {
+      const base = getPuzzleSession();
+      if (!base && next.image && next.tiles && next.tray && next.board && next.pieceCount) {
+        setPuzzleSession({
+          pieceCount: next.pieceCount,
+          image: next.image,
+          tiles: next.tiles,
+          tray: next.tray,
+          board: next.board,
+          winRecorded: next.winRecorded ?? false,
+        });
+        return;
+      }
+      patchPuzzleSession(next);
+    },
+    [],
+  );
+
+  const startGame = useCallback(
+    async (count: PuzzlePieceCount, img: ColoringImage) => {
+      setLoading(true);
+      setSelectedPiece(null);
+      winRecorded.current = false;
+      paintReady.current = false;
+      const g = gridForPieceCount(count);
+      try {
+        const sliced = await sliceImage(img.src, g.rows, g.cols);
+        const ids = sliced.map((t) => t.id);
+        shuffleInPlace(ids);
+        if (ids.every((id, i) => id === i) && ids.length > 1) {
+          [ids[0], ids[1]] = [ids[1], ids[0]];
+        }
+        const emptyBoard = Array.from({ length: g.pieces }, () => null);
+        setTiles(sliced);
+        setTray(ids);
+        setBoard(emptyBoard);
+        setImage(img);
+        setPieceCount(count);
+        setPuzzleSession({
+          pieceCount: count,
+          image: img,
+          tiles: sliced,
+          tray: ids,
+          board: emptyBoard,
+          winRecorded: false,
+        });
+        savePuzzlePrefs(
+          {
+            ...loadPuzzlePrefs(profile?.id),
+            lastPieceCount: count,
+            lastImageId: img.id,
+          },
+          profile?.id,
+        );
+        navigate("/rompecabezas/jugar");
+      } catch {
+        setTiles([]);
+        setTray([]);
+        setBoard([]);
+        setPuzzleSession(null);
+      } finally {
+        setLoading(false);
+      }
+    },
+    [navigate, profile?.id],
+  );
+
+  const onStartRandom = useCallback(() => {
+    const img = pickRandomColoringImage(progress.unlockedImages, prefs.lastImageId);
+    if (!img) return;
+    void startGame(pieceCount, img);
+  }, [pieceCount, prefs.lastImageId, progress.unlockedImages, startGame]);
+
+  const onNewImage = useCallback(() => {
+    const img = pickRandomColoringImage(progress.unlockedImages, image?.id);
+    if (!img) return;
+    void startGame(pieceCount, img);
+  }, [image?.id, pieceCount, progress.unlockedImages, startGame]);
+
+  const placePiece = useCallback(
+    (slot: number, pieceId: number) => {
+      if (board[slot] !== null) return;
+      if (pieceId !== slot) {
+        setShakeSlot(slot);
+        window.setTimeout(() => setShakeSlot(null), 420);
+        return;
+      }
+      setBoard((prev) => {
+        const next = [...prev];
+        next[slot] = pieceId;
+        syncSession({ board: next });
+        return next;
+      });
+      setTray((prev) => {
+        const next = prev.filter((id) => id !== pieceId);
+        syncSession({ tray: next });
+        return next;
+      });
+      setSelectedPiece(null);
+      setPlacedFlash(slot);
+      window.setTimeout(() => setPlacedFlash(null), 380);
+    },
+    [board, syncSession],
+  );
+
+  const onTrayTap = (pieceId: number) => {
+    setSelectedPiece((cur) => (cur === pieceId ? null : pieceId));
+  };
+
+  const onSlotTap = (slot: number) => {
+    if (selectedPiece === null) return;
+    placePiece(slot, selectedPiece);
+  };
+
+  const onPiecePointerDown = (pieceId: number, e: React.PointerEvent) => {
+    e.currentTarget.setPointerCapture(e.pointerId);
+    dragPiece.current = pieceId;
+    setSelectedPiece(pieceId);
+  };
+
+  const onBoardPointerUp = (slot: number) => {
+    const pieceId = dragPiece.current ?? selectedPiece;
+    dragPiece.current = null;
+    if (pieceId === null) return;
+    placePiece(slot, pieceId);
+  };
+
+  useEffect(() => {
+    if (phase !== "play" || !isComplete || !image) return;
+    if (!winRecorded.current) {
+      winRecorded.current = true;
+      syncSession({ winRecorded: true });
+      recordPuzzleCompleted(pieceCount, image.id, profile?.id);
+    }
+    const t = window.setTimeout(() => {
+      navigate("/rompecabezas/pintar", { replace: true });
+    }, 900);
+    return () => window.clearTimeout(t);
+  }, [phase, isComplete, image, pieceCount, profile?.id, navigate, syncSession]);
+
+  useEffect(() => {
+    if (phase !== "paint" || !image || paintReady.current) return;
+    const canvas = paintRef.current;
+    const ctx = canvas?.getContext("2d");
+    if (!canvas || !ctx) return;
+    let cancelled = false;
+    void (async () => {
+      await drawSvgOnCanvas(ctx, image.src, BOARD_W, BOARD_H);
+      if (cancelled) return;
+      paintUndo.resetStack();
+      paintReady.current = true;
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [phase, image, paintUndo]);
+
+  useEffect(() => {
+    if (phase === "hub") return;
+    if (tiles.length === 0 && !loading && !getPuzzleSession()) {
+      navigate("/rompecabezas", { replace: true });
+    }
+  }, [phase, tiles.length, loading, navigate]);
+
+  const onPaintPointer = (e: React.PointerEvent<HTMLCanvasElement>) => {
+    const canvas = paintRef.current;
+    if (!canvas) return;
+    const ctx = canvas.getContext("2d");
+    if (!ctx) return;
+    const { x, y } = canvasPointer(canvas, e.clientX, e.clientY);
+    paintUndo.snapshot();
+    floodFill(ctx, x, y, color);
+  };
+
+  const tileById = useMemo(() => {
+    const map = new Map<number, PuzzleTile>();
+    for (const t of tiles) map.set(t.id, t);
+    return map;
+  }, [tiles]);
+
+  const bookLabel = image ? packForImage(image.id)?.name : null;
+
+  if (phase === "hub") {
+    return (
+      <main className="screen rompecabezas rompecabezas-hub">
+        <div className="back-row">
+          <BackButton />
+        </div>
+        <div className="panel puzzle-hub-panel">
+          <div className="puzzle-hub-hero" aria-hidden>
+            <span className="puzzle-hub-orb" />
+            <span className="puzzle-hub-emoji">🖼️</span>
+          </div>
+          <h1 className="section-title">Rompecabezas</h1>
+          <p className="section-sub">Arma la imagen y después ¡píntala como en Dibujo!</p>
+
+          <p className="puzzle-count-label" id="piezas-label">
+            ¿Cuántas piezas?
+          </p>
+          <div className="puzzle-count-grid" role="group" aria-labelledby="piezas-label">
+            {PUZZLE_PIECE_COUNTS.map((n) => {
+              const g = gridForPieceCount(n);
+              return (
+                <button
+                  key={n}
+                  type="button"
+                  className={`puzzle-count-btn${pieceCount === n ? " active" : ""}`}
+                  onClick={() => setPieceCount(n)}
+                  aria-pressed={pieceCount === n}
+                >
+                  <span className="puzzle-count-num">{n}</span>
+                  <span className="puzzle-count-grid-hint">
+                    {g.rows}×{g.cols}
+                  </span>
+                </button>
+              );
+            })}
+          </div>
+
+          {prefs.completedCount > 0 && (
+            <p className="puzzle-stats">
+              Puzzles terminados: <strong>{prefs.completedCount}</strong>
+            </p>
+          )}
+
+          <button
+            type="button"
+            className="btn btn-leaf puzzle-start-btn"
+            onClick={onStartRandom}
+            disabled={loading}
+          >
+            {loading ? "Preparando…" : "¡Armar al azar!"}
+          </button>
+          <p className="puzzle-hint">Usa una página de tus libros Robcrea desbloqueados.</p>
+        </div>
+      </main>
+    );
+  }
+
+  if (phase === "paint" && image) {
+    return (
+      <main className="screen rompecabezas rompecabezas-paint">
+        <div className="back-row puzzle-toolbar">
+          <BackButton to="/rompecabezas" />
+          <h1 className="puzzle-inline-title">¡Píntalo!</h1>
+          <button type="button" className="btn btn-ghost" onClick={() => paintUndo.undo()}>
+            Deshacer
+          </button>
+        </div>
+        <p className="puzzle-paint-sub">
+          Toca las zonas blancas para colorear · {bookLabel} · {image.label}
+        </p>
+        <div className="puzzle-paint-layout">
+          <aside className="puzzle-paint-tools">
+            <ColorSwatches
+              color={color}
+              onColor={setColor}
+              showMixer={mixer.showMixer}
+              onToggleMixer={() => mixer.setShowMixer((v) => !v)}
+              compact
+            />
+            {mixer.showMixer && (
+              <ColorMixer
+                hue={mixer.hue}
+                sat={mixer.sat}
+                onHue={mixer.setHue}
+                onSat={mixer.setSat}
+                onApply={() => {
+                  setColor(hsvToHex(mixer.hue, mixer.sat, 1));
+                  mixer.setShowMixer(false);
+                }}
+                compact
+                layout="stack"
+              />
+            )}
+          </aside>
+          <div className="puzzle-paint-stage">
+            <canvas
+              ref={paintRef}
+              className="puzzle-paint-canvas"
+              width={BOARD_W}
+              height={BOARD_H}
+              onPointerDown={onPaintPointer}
+            />
+          </div>
+        </div>
+        <div className="puzzle-paint-actions">
+          <button type="button" className="btn btn-sky" onClick={onNewImage}>
+            Otro puzzle
+          </button>
+          <button type="button" className="btn btn-leaf" onClick={() => navigate("/rompecabezas")}>
+            Elegir piezas
+          </button>
+        </div>
+      </main>
+    );
+  }
+
+  return (
+    <main className="screen rompecabezas rompecabezas-play">
+      <div className="back-row puzzle-toolbar">
+        <BackButton to="/rompecabezas" />
+        <div className="puzzle-progress-chip" aria-live="polite">
+          {placedCount} / {grid.pieces}
+        </div>
+        <button type="button" className="btn btn-ghost" onClick={onNewImage} disabled={loading}>
+          Otra imagen
+        </button>
+      </div>
+
+      {image && (
+        <p className="puzzle-play-meta">
+          {bookLabel} · {image.label} · {grid.rows}×{grid.cols}
+        </p>
+      )}
+
+      {isComplete && (
+        <p className="puzzle-win-banner" role="status">
+          ¡Lo armaste! Vamos a pintar…
+        </p>
+      )}
+
+      <div
+        className="puzzle-board"
+        style={{
+          gridTemplateColumns: `repeat(${grid.cols}, 1fr)`,
+          gridTemplateRows: `repeat(${grid.rows}, 1fr)`,
+        }}
+        aria-label="Tablero del rompecabezas"
+      >
+        {board.map((pieceId, slot) => {
+          const tile = pieceId !== null ? tileById.get(pieceId) : null;
+          return (
+            <button
+              key={slot}
+              type="button"
+              data-slot={slot}
+              className={[
+                "puzzle-slot",
+                tile ? "puzzle-slot--filled" : "",
+                shakeSlot === slot ? "puzzle-slot--shake" : "",
+                placedFlash === slot ? "puzzle-slot--flash" : "",
+              ]
+                .filter(Boolean)
+                .join(" ")}
+              onClick={() => onSlotTap(slot)}
+              onPointerUp={() => onBoardPointerUp(slot)}
+              aria-label={tile ? `Pieza colocada ${slot + 1}` : `Hueco ${slot + 1}`}
+            >
+              {tile ? (
+                <img src={tile.dataUrl} alt="" draggable={false} />
+              ) : (
+                <span className="puzzle-slot-empty" />
+              )}
+            </button>
+          );
+        })}
+      </div>
+
+      <div className="puzzle-tray" aria-label="Piezas sueltas">
+        <p className="puzzle-tray-label">Toca una pieza y luego el hueco correcto</p>
+        <div className="puzzle-tray-scroll">
+          {tray.map((pieceId) => {
+            const tile = tileById.get(pieceId);
+            if (!tile) return null;
+            return (
+              <button
+                key={pieceId}
+                type="button"
+                className={`puzzle-piece${selectedPiece === pieceId ? " selected" : ""}`}
+                onClick={() => onTrayTap(pieceId)}
+                onPointerDown={(e) => onPiecePointerDown(pieceId, e)}
+                aria-pressed={selectedPiece === pieceId}
+                aria-label={`Pieza ${pieceId + 1}`}
+              >
+                <img src={tile.dataUrl} alt="" draggable={false} />
+              </button>
+            );
+          })}
+        </div>
+      </div>
+    </main>
+  );
+}

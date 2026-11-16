@@ -39,6 +39,13 @@ const sections = [
     className: "tile-dibujo",
   },
   {
+    to: "/rompecabezas",
+    title: "Rompecabezas",
+    desc: "Arma y pinta la imagen",
+    emoji: "🖼️",
+    className: "tile-rompecabezas",
+  },
+  {
     to: "/crear",
     title: "Crear",
     desc: "Bloques y Hora del Código",

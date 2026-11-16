@@ -14,6 +14,7 @@ import { Tetris } from "./pages/Tetris";
 import { Snake } from "./pages/Snake";
 import { Dibujo } from "./pages/Dibujo";
 import { Crear } from "./pages/Crear";
+import { Rompecabezas } from "./pages/Rompecabezas";
 import { preloadVoices } from "./utils/speech";
 
 export default function App() {
@@ -38,6 +39,8 @@ export default function App() {
           <Route path="juegos/snake" element={<Snake />} />
           <Route path="dibujo" element={<Dibujo />} />
           <Route path="crear" element={<Crear />} />
+          <Route path="rompecabezas" element={<Rompecabezas />} />
+          <Route path="rompecabezas/:phase" element={<Rompecabezas />} />
           <Route path="*" element={<Navigate to="/" replace />} />
         </Route>
       </Route>

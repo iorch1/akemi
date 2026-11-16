@@ -11,6 +11,9 @@ const titles: { match: RegExp; title: string }[] = [
   { match: /^\/juegos\/snake/, title: "Snake" },
   { match: /^\/juegos/, title: "Juegos" },
   { match: /^\/dibujo/, title: "Dibujo" },
+  { match: /^\/rompecabezas\/pintar/, title: "Pintar puzzle" },
+  { match: /^\/rompecabezas\/jugar/, title: "Armar puzzle" },
+  { match: /^\/rompecabezas/, title: "Rompecabezas" },
   { match: /^\/crear/, title: "Crear" },
 ];
 
@@ -25,7 +28,9 @@ export function NativeTopBar() {
   if (!isNativeApp()) return null;
 
   const title = titleForPath(pathname);
-  const inGame = /^\/juegos\/(tetris|snake)/.test(pathname);
+  const inGame =
+    /^\/juegos\/(tetris|snake)/.test(pathname) ||
+    /^\/rompecabezas\/(jugar|pintar)/.test(pathname);
 
   return (
     <header className="native-top-bar">

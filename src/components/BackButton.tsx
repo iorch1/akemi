@@ -1,7 +1,7 @@
 import { Link, useLocation } from "react-router-dom";
 import { isNativeApp } from "../lib/platform";
 
-const NATIVE_ROOTS = /^\/(leer|mates|juegos|dibujo|crear)\/?$/;
+const NATIVE_ROOTS = /^\/(leer|mates|juegos|dibujo|crear|rompecabezas)\/?$/;
 
 export function BackButton({ to = "/" }: { to?: string }) {
   const { pathname } = useLocation();
