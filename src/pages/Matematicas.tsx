@@ -77,11 +77,11 @@ export function Matematicas() {
     if (n === problem.answer) {
       setFeedback("¡Correcto! ⭐");
       setScore((s) => s + 1);
-      speak("¡Correcto!");
+      speak("¡Correcto!", { mode: "feedback" });
       setTimeout(next, 800);
     } else {
       setFeedback("Casi… ¡sigue!");
-      speak("Inténtalo otra vez");
+      speak("Inténtalo otra vez", { mode: "feedback" });
     }
   }
 
