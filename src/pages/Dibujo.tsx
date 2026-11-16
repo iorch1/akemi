@@ -1,5 +1,8 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { BackButton } from "../components/BackButton";
+import { useProgress } from "../hooks/useProgress";
+import { COLORING_PACKS } from "../lib/coloring-packs";
+import { drawSvgOnCanvas } from "../lib/svg-canvas";
 import "./Dibujo.css";
 
 type Mode = "colorear" | "libre";
@@ -16,88 +19,6 @@ const COLORS = [
   "#c0392b",
   "#27ae60",
 ];
-
-const TEMPLATES = [
-  { id: "casa", label: "Casa" },
-  { id: "sol", label: "Sol" },
-  { id: "pez", label: "Pez" },
-  { id: "estrella", label: "Estrella" },
-] as const;
-
-function drawTemplate(ctx: CanvasRenderingContext2D, id: string, w: number, h: number) {
-  ctx.clearRect(0, 0, w, h);
-  ctx.fillStyle = "#f7fbff";
-  ctx.fillRect(0, 0, w, h);
-  ctx.strokeStyle = "#0b3a4a";
-  ctx.lineWidth = 4;
-  ctx.lineJoin = "round";
-  ctx.lineCap = "round";
-
-  if (id === "casa") {
-    ctx.beginPath();
-    ctx.rect(90, 160, 140, 110);
-    ctx.moveTo(80, 160);
-    ctx.lineTo(160, 80);
-    ctx.lineTo(240, 160);
-    ctx.closePath();
-    ctx.stroke();
-    ctx.strokeRect(140, 200, 40, 70);
-    ctx.strokeRect(110, 180, 35, 35);
-    ctx.strokeRect(175, 180, 35, 35);
-  } else if (id === "sol") {
-    ctx.beginPath();
-    ctx.arc(160, 160, 55, 0, Math.PI * 2);
-    ctx.stroke();
-    for (let i = 0; i < 8; i++) {
-      const a = (i * Math.PI) / 4;
-      ctx.beginPath();
-      ctx.moveTo(160 + Math.cos(a) * 70, 160 + Math.sin(a) * 70);
-      ctx.lineTo(160 + Math.cos(a) * 100, 160 + Math.sin(a) * 100);
-      ctx.stroke();
-    }
-    ctx.beginPath();
-    ctx.arc(140, 150, 6, 0, Math.PI * 2);
-    ctx.arc(180, 150, 6, 0, Math.PI * 2);
-    ctx.fillStyle = "#0b3a4a";
-    ctx.fill();
-    ctx.beginPath();
-    ctx.arc(160, 170, 18, 0.15 * Math.PI, 0.85 * Math.PI);
-    ctx.stroke();
-  } else if (id === "pez") {
-    ctx.beginPath();
-    ctx.ellipse(150, 160, 70, 40, 0, 0, Math.PI * 2);
-    ctx.moveTo(220, 160);
-    ctx.lineTo(270, 120);
-    ctx.lineTo(270, 200);
-    ctx.closePath();
-    ctx.stroke();
-    ctx.beginPath();
-    ctx.arc(120, 150, 5, 0, Math.PI * 2);
-    ctx.fillStyle = "#0b3a4a";
-    ctx.fill();
-    ctx.beginPath();
-    ctx.moveTo(150, 130);
-    ctx.quadraticCurveTo(170, 110, 190, 130);
-    ctx.stroke();
-  } else {
-    const cx = 160;
-    const cy = 160;
-    const spikes = 5;
-    const outer = 80;
-    const inner = 35;
-    ctx.beginPath();
-    for (let i = 0; i < spikes * 2; i++) {
-      const r = i % 2 === 0 ? outer : inner;
-      const a = (i * Math.PI) / spikes - Math.PI / 2;
-      const x = cx + Math.cos(a) * r;
-      const y = cy + Math.sin(a) * r;
-      if (i === 0) ctx.moveTo(x, y);
-      else ctx.lineTo(x, y);
-    }
-    ctx.closePath();
-    ctx.stroke();
-  }
-}
 
 function hexToRgb(hex: string) {
   const h = hex.replace("#", "");
@@ -126,7 +47,6 @@ function floodFill(ctx: CanvasRenderingContext2D, x: number, y: number, fillHex:
     Math.abs(data[i + 2] - tb) < 40 &&
     Math.abs(data[i + 3] - ta) < 40;
 
-  // Don't fill dark outlines
   if (tr < 60 && tg < 60 && tb < 80) return;
 
   const stack: number[] = [sx, sy];
@@ -143,25 +63,26 @@ function floodFill(ctx: CanvasRenderingContext2D, x: number, y: number, fillHex:
     data[i + 1] = fill.g;
     data[i + 2] = fill.b;
     data[i + 3] = 255;
-    if (cx > 0) {
-      stack.push(cx - 1, cy);
-    }
-    if (cx < width - 1) {
-      stack.push(cx + 1, cy);
-    }
-    if (cy > 0) {
-      stack.push(cx, cy - 1);
-    }
-    if (cy < height - 1) {
-      stack.push(cx, cy + 1);
-    }
+    if (cx > 0) stack.push(cx - 1, cy);
+    if (cx < width - 1) stack.push(cx + 1, cy);
+    if (cy > 0) stack.push(cx, cy - 1);
+    if (cy < height - 1) stack.push(cx, cy + 1);
   }
   ctx.putImageData(img, 0, 0);
 }
 
 export function Dibujo() {
+  const [progress] = useProgress();
+  const unlockedTemplates = useMemo(
+    () =>
+      COLORING_PACKS.flatMap((p) => p.images).filter((img) =>
+        progress.unlockedImages.includes(img.id),
+      ),
+    [progress.unlockedImages],
+  );
+
   const [mode, setMode] = useState<Mode>("colorear");
-  const [template, setTemplate] = useState<(typeof TEMPLATES)[number]["id"]>("casa");
+  const [templateId, setTemplateId] = useState(unlockedTemplates[0]?.id ?? "");
   const [color, setColor] = useState(COLORS[1]);
   const [brush, setBrush] = useState(8);
   const [erasing, setErasing] = useState(false);
@@ -170,17 +91,30 @@ export function Dibujo() {
   const drawing = useRef(false);
   const last = useRef<{ x: number; y: number } | null>(null);
 
-  const paintTemplate = useCallback(() => {
-    const canvas = colorCanvasRef.current;
-    if (!canvas) return;
-    const ctx = canvas.getContext("2d");
-    if (!ctx) return;
-    drawTemplate(ctx, template, canvas.width, canvas.height);
-  }, [template]);
+  const currentTemplate = unlockedTemplates.find((t) => t.id === templateId) ?? unlockedTemplates[0];
 
   useEffect(() => {
-    if (mode === "colorear") paintTemplate();
-  }, [mode, paintTemplate]);
+    if (unlockedTemplates.length && !unlockedTemplates.some((t) => t.id === templateId)) {
+      setTemplateId(unlockedTemplates[0].id);
+    }
+  }, [unlockedTemplates, templateId]);
+
+  const paintTemplate = useCallback(async () => {
+    const canvas = colorCanvasRef.current;
+    if (!canvas || !currentTemplate) return;
+    const ctx = canvas.getContext("2d");
+    if (!ctx) return;
+    try {
+      await drawSvgOnCanvas(ctx, currentTemplate.src, canvas.width, canvas.height);
+    } catch {
+      ctx.fillStyle = "#f7fbff";
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+    }
+  }, [currentTemplate]);
+
+  useEffect(() => {
+    if (mode === "colorear" && currentTemplate) void paintTemplate();
+  }, [mode, paintTemplate, currentTemplate]);
 
   useEffect(() => {
     const canvas = freeCanvasRef.current;
@@ -250,6 +184,9 @@ export function Dibujo() {
     ctx.fillRect(0, 0, canvas.width, canvas.height);
   }
 
+  const lockedCount =
+    COLORING_PACKS.flatMap((p) => p.images).length - unlockedTemplates.length;
+
   return (
     <main className="screen dibujo">
       <div className="back-row">
@@ -257,7 +194,10 @@ export function Dibujo() {
       </div>
       <div className="panel">
         <h1 className="section-title">Dibujo</h1>
-        <p className="section-sub">Colorea dibujos o crea en el lienzo libre</p>
+        <p className="section-sub">
+          {unlockedTemplates.length} plantillas listas
+          {lockedCount > 0 ? ` · ${lockedCount} más en lectura y mates` : ""}
+        </p>
 
         <div className="level-pills">
           <button
@@ -294,33 +234,41 @@ export function Dibujo() {
 
         {mode === "colorear" ? (
           <>
-            <div className="level-pills">
-              {TEMPLATES.map((t) => (
-                <button
-                  key={t.id}
-                  type="button"
-                  className={`level-pill ${template === t.id ? "active" : ""}`}
-                  onClick={() => setTemplate(t.id)}
-                >
-                  {t.label}
-                </button>
-              ))}
-            </div>
-            <p className="dibujo-hint">Toca una zona para rellenarla de color</p>
-            <div className="canvas-frame">
-              <canvas
-                ref={colorCanvasRef}
-                width={320}
-                height={320}
-                className="draw-canvas"
-                onPointerDown={onColorPointer}
-              />
-            </div>
-            <div className="score-bar">
-              <button type="button" className="btn btn-leaf" onClick={paintTemplate}>
-                Limpiar
-              </button>
-            </div>
+            {unlockedTemplates.length === 0 ? (
+              <p className="dibujo-locked-msg">
+                Aún no hay dibujos. Gana retos en Aprender a leer o Matemáticas.
+              </p>
+            ) : (
+              <>
+                <div className="dibujo-template-scroll level-pills">
+                  {unlockedTemplates.map((t) => (
+                    <button
+                      key={t.id}
+                      type="button"
+                      className={`level-pill template-pill ${templateId === t.id ? "active" : ""}`}
+                      onClick={() => setTemplateId(t.id)}
+                    >
+                      {t.label}
+                    </button>
+                  ))}
+                </div>
+                <p className="dibujo-hint">Toca una zona para rellenarla de color</p>
+                <div className="canvas-frame">
+                  <canvas
+                    ref={colorCanvasRef}
+                    width={320}
+                    height={320}
+                    className="draw-canvas"
+                    onPointerDown={onColorPointer}
+                  />
+                </div>
+                <div className="score-bar">
+                  <button type="button" className="btn btn-leaf" onClick={() => void paintTemplate()}>
+                    Limpiar
+                  </button>
+                </div>
+              </>
+            )}
           </>
         ) : (
           <>

@@ -68,3 +68,53 @@
   color: var(--sun-hot);
   margin: 0.4rem 0 0;
 }
+
+.mates-progress {
+  margin: 0.5rem 0 0.75rem;
+  padding: 0.65rem 0.75rem;
+  border-radius: 1rem;
+  background: rgba(255, 255, 255, 0.65);
+}
+
+.mates-level-badge {
+  font-family: var(--font-display);
+  font-weight: 800;
+  font-size: 1.1rem;
+}
+
+.mates-streak {
+  margin-top: 0.25rem;
+  font-size: 0.95rem;
+}
+
+.mates-reward-hint {
+  margin: 0.35rem 0 0.5rem;
+  font-size: 0.86rem;
+  opacity: 0.9;
+}
+
+.mates-streak-dots {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  gap: 0.35rem;
+}
+
+.mates-streak-dots li {
+  flex: 1;
+  height: 0.55rem;
+  border-radius: 999px;
+  background: rgba(11, 58, 74, 0.15);
+}
+
+.mates-streak-dots li.on {
+  background: linear-gradient(90deg, #ffd166, #ff9f1c);
+}
+
+.mates-toast {
+  margin-top: 0.45rem;
+  font-weight: 800;
+  color: #1a9bb5;
+  font-size: 0.92rem;
+}

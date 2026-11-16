@@ -1,5 +1,8 @@
 import { useMemo, useState } from "react";
 import { BackButton } from "../components/BackButton";
+import { useProgress } from "../hooks/useProgress";
+import { imageById, MATH_IMAGE_BY_LEVEL } from "../lib/coloring-packs";
+import { mathCorrect, mathWrong } from "../lib/progress";
 import { speak } from "../utils/speech";
 import "./Matematicas.css";
 
@@ -46,15 +49,23 @@ function makeProblem(op: Op, diff: Difficulty) {
 }
 
 export function Matematicas() {
+  const [progress, setProgress] = useProgress();
   const [op, setOp] = useState<Op>("sumar");
   const [diff, setDiff] = useState<Difficulty>("facil");
   const [seed, setSeed] = useState(0);
   const [input, setInput] = useState("");
   const [feedback, setFeedback] = useState("");
-  const [score, setScore] = useState(0);
+  const [toast, setToast] = useState("");
 
   const problem = useMemo(() => makeProblem(op, diff), [op, diff, seed]);
   const symbol = OPS.find((o) => o.id === op)!.symbol;
+  const { level, streak, rewardedLevels } = progress.math;
+
+  const rewardLabel = useMemo(() => {
+    if (level > 5) return "Pack Super guerreras Akemi";
+    const id = MATH_IMAGE_BY_LEVEL[level];
+    return id ? imageById(id)?.label : undefined;
+  }, [level]);
 
   function next() {
     setSeed((s) => s + 1);
@@ -76,14 +87,31 @@ export function Matematicas() {
     const n = Number(input);
     if (n === problem.answer) {
       setFeedback("¡Correcto! ⭐");
-      setScore((s) => s + 1);
+      const result = mathCorrect(progress);
+      setProgress(result.state);
       speak("¡Correcto!", { mode: "feedback" });
+
+      if (result.unlockedImage) {
+        const label = imageById(result.unlockedImage)?.label ?? "dibujo";
+        setToast(`¡Nuevo dibujo: ${label}!`);
+      } else if (result.superPackUnlocked) {
+        setToast("¡Pack Super guerreras Akemi desbloqueado!");
+        speak("¡Pack desbloqueado!", { mode: "feedback" });
+      } else if (result.levelAdvanced) {
+        setToast(`¡Nivel ${result.state.math.level}! Sigue la racha.`);
+      }
+
       setTimeout(next, 800);
     } else {
-      setFeedback("Casi… ¡sigue!");
+      setFeedback("Casi… ¡empezamos de cero!");
+      const result = mathWrong(progress);
+      setProgress(result.state);
       speak("Inténtalo otra vez", { mode: "feedback" });
+      setInput("");
     }
   }
+
+  const alreadyRewarded = rewardedLevels.includes(level);
 
   return (
     <main className="screen mates">
@@ -92,7 +120,28 @@ export function Matematicas() {
       </div>
       <div className="panel">
         <h1 className="section-title">Matemáticas</h1>
-        <p className="section-sub">Practica con números y gana estrellas</p>
+        <p className="section-sub">
+          Nivel {level}: 5 aciertos seguidos para avanzar y desbloquear arte
+        </p>
+
+        <div className="mates-progress" aria-label="Progreso del nivel">
+          <span className="mates-level-badge">Nivel {level}</span>
+          <div className="mates-streak">
+            Racha: <strong>{streak}</strong> / 5
+          </div>
+          {rewardLabel && (
+            <p className="mates-reward-hint">
+              {alreadyRewarded && level <= 5
+                ? "Ya tienes el dibujo de este nivel; avanza sin duplicado."
+                : `Próximo dibujo: ${rewardLabel}`}
+            </p>
+          )}
+          <ul className="mates-streak-dots">
+            {Array.from({ length: 5 }).map((_, i) => (
+              <li key={i} className={i < streak ? "on" : ""} />
+            ))}
+          </ul>
+        </div>
 
         <div className="level-pills">
           {OPS.map((o) => (
@@ -177,7 +226,7 @@ export function Matematicas() {
           <p className={`feedback ${feedback.includes("Correcto") ? "ok" : feedback ? "bad" : ""}`}>
             {feedback}
           </p>
-          <p className="mates-score">Estrellas: {score}</p>
+          {toast && <p className="mates-toast">{toast}</p>}
         </div>
       </div>
     </main>

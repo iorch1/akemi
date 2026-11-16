@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 320 320" width="320" height="320">
+  <rect width="320" height="320" fill="#f7fbff"/>
+  <g fill="none" stroke="#0b3a4a" stroke-width="3" stroke-linecap="round" stroke-linejoin="round">
+
+    <path d="M160.0 75.0 L178.8 124.1 L231.3 126.8 L190.4 159.9 L204.1 210.7 L160.0 182.0 L115.9 210.7 L129.6 159.9 L88.7 126.8 L141.2 124.1 Z"/>
+    <circle cx="145" cy="145" r="5"/>
+    <circle cx="175" cy="145" r="5"/>
+    <path d="M155 165 Q160 172 165 165"/>
+    <ellipse cx="160" cy="210" rx="40" ry="25"/>
+  
+  </g>
+  <title>Akemi original 6-4</title>
+</svg>

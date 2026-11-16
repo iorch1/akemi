@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 320 320" width="320" height="320">
+  <rect width="320" height="320" fill="#f7fbff"/>
+  <g fill="none" stroke="#0b3a4a" stroke-width="3" stroke-linecap="round" stroke-linejoin="round">
+
+    <rect x="60" y="200" width="200" height="12" rx="4"/>
+    <path d="M80 200 L80 120 Q160 60 240 120 L240 200"/>
+    <circle cx="160" cy="135" r="35"/>
+    <path d="M125 135 L115 100 M195 135 L205 100"/>
+    <path d="M140 220 L140 260 M180 220 L180 260"/>
+    <path d="M70 90 L85 70 L100 90" stroke-width="2"/><path d="M220 85 L235 65 L250 85" stroke-width="2"/>
+  
+  </g>
+  <title>Akemi original 1-5</title>
+</svg>
