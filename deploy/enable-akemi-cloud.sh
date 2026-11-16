@@ -1,4 +1,4 @@
-#!/usr/bin/env bash
+#!/bin/bash
 # Publica https://cloud.akhio.com/akemi/
 # Uso: sudo bash /home/akhio/akemi-web/deploy/enable-akemi-cloud.sh
 set -euo pipefail

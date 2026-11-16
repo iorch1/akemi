@@ -31,6 +31,8 @@ O clona el repo en el servidor, `git pull` y `PATH=/opt/node24/bin:$PATH npm run
 
 ## Apache (una vez, sudo)
 
+Los `.sh` del repo van con finales de línea Unix (LF). Si `set: pipefail: nombre de opción inválido`, el script tiene CRLF: `sed -i 's/\r$//' ~/akemi-web/deploy/enable-akemi-cloud.sh` o vuelve a copiar desde GitHub.
+
 ```bash
 sudo bash ~/akemi-web/deploy/enable-akemi-cloud.sh
 ```
