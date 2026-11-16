@@ -36,10 +36,10 @@ type LibroMeta = {
 
 const LIBRO_META: LibroMeta[] = [
   { numero: 1, emoji: "📗", name: "Libro 1", unlockHint: "Disponible desde el inicio" },
-  { numero: 2, emoji: "📘", name: "Libro 2", unlockHint: "Lectura · 20 puntos (5 en letras, sílabas, palabras y frases)" },
-  { numero: 3, emoji: "📙", name: "Libro 3", unlockHint: "Lectura · segunda ronda 20/20" },
-  { numero: 4, emoji: "📕", name: "Libro 4", unlockHint: "Lectura · tercera ronda 20/20" },
-  { numero: 5, emoji: "📓", name: "Libro 5", unlockHint: "Lectura · cuarta ronda 20/20" },
+  { numero: 2, emoji: "📘", name: "Libro 2", unlockHint: "Aprender a leer · completa el nivel de camino 1 (20 puntos)" },
+  { numero: 3, emoji: "📙", name: "Libro 3", unlockHint: "Aprender a leer · completa el nivel de camino 2 (20 puntos)" },
+  { numero: 4, emoji: "📕", name: "Libro 4", unlockHint: "Aprender a leer · completa el nivel de camino 3 (20 puntos)" },
+  { numero: 5, emoji: "📓", name: "Libro 5", unlockHint: "Aprender a leer · completa el nivel de camino 4 (20 puntos)" },
   { numero: 6, emoji: "1️⃣", name: "Libro 6", unlockHint: "Matemáticas · nivel 1: racha de 5 aciertos" },
   { numero: 7, emoji: "2️⃣", name: "Libro 7", unlockHint: "Matemáticas · nivel 2: racha de 5 aciertos" },
   { numero: 8, emoji: "3️⃣", name: "Libro 8", unlockHint: "Matemáticas · nivel 3: racha de 5 aciertos" },
@@ -76,10 +76,7 @@ export const ALL_IMAGE_IDS = COLORING_PACKS.flatMap((p) => p.images.map((i) => i
 export const STARTER_PACK_ID = "libro-01";
 export const STARTER_IMAGE_IDS = COLORING_PACKS.find((p) => p.id === STARTER_PACK_ID)?.images.map((i) => i.id) ?? [];
 
-/** Libros de lectura en orden de desbloqueo (cada 20/20). */
-export const READING_PACK_ORDER = ["libro-02", "libro-03", "libro-04", "libro-05"] as const;
-
-/** Sección de lectura → libro temático (solo UI / pistas). */
+/** Pack index → reading level id */
 export const READING_PACK_BY_LEVEL: Record<string, string> = {
   letras: "libro-02",
   silabas: "libro-03",

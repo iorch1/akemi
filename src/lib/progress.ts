@@ -2,28 +2,35 @@ import {
   ALL_IMAGE_IDS,
   COLORING_PACKS,
   MATH_PACK_BY_LEVEL,
-  READING_PACK_ORDER,
   STARTER_IMAGE_IDS,
   SUPER_PACK_IDS,
   packById,
 } from "./coloring-packs";
-import { activeProfile, loadProfiles, progressKey, runProgressSchemaMigration } from "./profiles";
+import { activeProfile, loadProfiles, progressKey } from "./profiles";
+import {
+  type ReadingSectionId,
+  READING_BOOK_BY_PATH_LEVEL,
+  isLevelComplete,
+  maxPointsInLevel,
+  nextSectionAfter,
+  pointsPerSection,
+  sectionsForState,
+  sectionPoints,
+  totalPointsInLevel,
+} from "./reading-path";
 
-export type ReadingLevelId = "letras" | "silabas" | "palabras" | "frases";
+/** @deprecated use ReadingSectionId */
+export type ReadingLevelId = ReadingSectionId;
 
-export const READING_POINTS_PER_SECTION = 5;
-export const READING_POINTS_TO_PASS = 20;
-
-export type ReadingModeProgress = {
-  /** Índices de retos acertados (como mucho 5 puntos por sección). */
-  done: number[];
+export type ReadingPathProgress = {
+  pathLevel: number;
+  levelsCompleted: number;
+  sectionPoints: Partial<Record<ReadingSectionId, number>>;
 };
 
 export type ProgressState = {
   unlockedImages: string[];
-  reading: Record<ReadingLevelId, ReadingModeProgress>;
-  /** Cada 20/20 en las cuatro secciones desbloquea libro-02…05 y reinicia retos. */
-  readingRound: number;
+  readingPath: ReadingPathProgress;
   math: {
     level: number;
     streak: number;
@@ -32,47 +39,16 @@ export type ProgressState = {
   };
 };
 
-function emptyReading(): ProgressState["reading"] {
-  return {
-    letras: { done: [] },
-    silabas: { done: [] },
-    palabras: { done: [] },
-    frases: { done: [] },
-  };
-}
+const SCHEMA_MIGRATED = "akemi-schema-migrated-v4";
 
-function normalizeReading(raw?: Partial<ReadingModeProgress>): ReadingModeProgress {
-  const done = (raw?.done ?? []).filter((i) => i >= 0 && i <= 4).slice(0, READING_POINTS_PER_SECTION);
-  return { done: [...new Set(done)].sort((a, b) => a - b) };
-}
-
-export const READING_LEVEL_ORDER: ReadingLevelId[] = ["letras", "silabas", "palabras", "frases"];
-
-export function readingLevelNumber(level: ReadingLevelId): number {
-  return READING_LEVEL_ORDER.indexOf(level) + 1;
-}
-
-export function readingSectionPoints(state: ProgressState, level: ReadingLevelId): number {
-  return Math.min(READING_POINTS_PER_SECTION, state.reading[level].done.length);
-}
-
-export function totalReadingPoints(state: ProgressState): number {
-  return READING_LEVEL_ORDER.reduce((sum, lvl) => sum + readingSectionPoints(state, lvl), 0);
-}
-
-export function isReadingRoundComplete(state: ProgressState): boolean {
-  return totalReadingPoints(state) >= READING_POINTS_TO_PASS;
-}
-
-export function nextReadingPackId(state: ProgressState): string | null {
-  return READING_PACK_ORDER[state.readingRound] ?? null;
+function emptyReadingPath(): ReadingPathProgress {
+  return { pathLevel: 1, levelsCompleted: 0, sectionPoints: {} };
 }
 
 export function defaultProgress(): ProgressState {
   return {
     unlockedImages: [...STARTER_IMAGE_IDS],
-    reading: emptyReading(),
-    readingRound: 0,
+    readingPath: emptyReadingPath(),
     math: {
       level: 1,
       streak: 0,
@@ -82,19 +58,69 @@ export function defaultProgress(): ProgressState {
   };
 }
 
+type LegacyV3 = {
+  unlockedImages?: string[];
+  reading?: Record<string, { done?: number[]; nivelCompleto?: boolean }>;
+  math?: ProgressState["math"];
+};
+
+function migrateV3ToV4(raw: LegacyV3, base: ProgressState): ProgressState {
+  const levelsCompleted = ["letras", "silabas", "palabras", "frases"].filter(
+    (id) => raw.reading?.[id]?.nivelCompleto,
+  ).length;
+  return {
+    ...base,
+    unlockedImages: base.unlockedImages,
+    readingPath: {
+      pathLevel: Math.max(1, levelsCompleted + 1),
+      levelsCompleted,
+      sectionPoints: {},
+    },
+    math: base.math,
+  };
+}
+
+function runGlobalSchemaMigration(): void {
+  if (localStorage.getItem(SCHEMA_MIGRATED)) return;
+  const keys: string[] = [];
+  for (let i = 0; i < localStorage.length; i++) {
+    const k = localStorage.key(i);
+    if (k?.startsWith("akemi-progress-v3-")) keys.push(k);
+  }
+  for (const oldKey of keys) {
+    const profileId = oldKey.replace("akemi-progress-v3-", "");
+    const newKey = `akemi-progress-v4-${profileId}`;
+    if (!localStorage.getItem(newKey)) {
+      try {
+        const raw = JSON.parse(localStorage.getItem(oldKey) ?? "null") as LegacyV3;
+        const migrated = migrateV3ToV4(raw, defaultProgress());
+        migrated.unlockedImages = ALL_IMAGE_IDS.filter((id) =>
+          new Set([...STARTER_IMAGE_IDS, ...(raw.unlockedImages ?? [])]).has(id),
+        );
+        if (raw.math) migrated.math = { ...defaultProgress().math, ...raw.math };
+        localStorage.setItem(newKey, JSON.stringify(migrated));
+      } catch {
+        /* ignore */
+      }
+    }
+    localStorage.removeItem(oldKey);
+  }
+  localStorage.removeItem("akemi-progress-v2");
+  localStorage.setItem(SCHEMA_MIGRATED, "1");
+}
+
 function normalize(raw: Partial<ProgressState> | null): ProgressState {
   const base = defaultProgress();
   if (!raw) return base;
   const unlocked = new Set([...STARTER_IMAGE_IDS, ...(raw.unlockedImages ?? [])]);
+  const path = raw.readingPath ?? emptyReadingPath();
   return {
     unlockedImages: ALL_IMAGE_IDS.filter((id) => unlocked.has(id)),
-    reading: {
-      letras: normalizeReading(raw.reading?.letras),
-      silabas: normalizeReading(raw.reading?.silabas),
-      palabras: normalizeReading(raw.reading?.palabras),
-      frases: normalizeReading(raw.reading?.frases),
+    readingPath: {
+      pathLevel: Math.max(1, path.pathLevel ?? 1),
+      levelsCompleted: Math.max(0, path.levelsCompleted ?? 0),
+      sectionPoints: { ...(path.sectionPoints ?? {}) },
     },
-    readingRound: Math.max(0, Math.min(READING_PACK_ORDER.length, raw.readingRound ?? 0)),
     math: {
       level: Math.max(1, raw.math?.level ?? 1),
       streak: Math.min(5, Math.max(0, raw.math?.streak ?? 0)),
@@ -106,13 +132,13 @@ function normalize(raw: Partial<ProgressState> | null): ProgressState {
 
 function currentProgressKey(): string | null {
   const store = loadProfiles();
-  runProgressSchemaMigration(store);
   const profile = activeProfile(store);
   if (!profile) return null;
   return progressKey(profile.id);
 }
 
 export function loadProgress(): ProgressState {
+  runGlobalSchemaMigration();
   const key = currentProgressKey();
   if (!key) return defaultProgress();
   try {
@@ -138,38 +164,60 @@ function unlockPackImages(state: ProgressState, packId: string): ProgressState {
   return { ...state, unlockedImages: ALL_IMAGE_IDS.filter((id) => set.has(id)) };
 }
 
-/** Registra un reto de lectura acertado. Suma 1 punto por sección (máx. 5). Al 20/20 desbloquea libro y reinicia retos. */
-export function completeReadingChallenge(
-  state: ProgressState,
-  level: ReadingLevelId,
-  challengeIndex: number,
-): {
+export type ReadingAnswerResult = {
   state: ProgressState;
+  sectionComplete: boolean;
+  levelComplete: boolean;
+  nextSection: ReadingSectionId | null;
   packUnlocked: string | null;
-  roundComplete: boolean;
-} {
-  if (challengeIndex < 0 || challengeIndex > 4) {
-    return { state, packUnlocked: null, roundComplete: false };
+};
+
+/** +1 punto en la sección actual del nivel de camino (máx. 5 por sección). */
+export function registerReadingCorrect(
+  state: ProgressState,
+  section: ReadingSectionId,
+): ReadingAnswerResult {
+  const allowed = sectionsForState(state);
+  if (!allowed.includes(section)) {
+    return {
+      state,
+      sectionComplete: false,
+      levelComplete: false,
+      nextSection: null,
+      packUnlocked: null,
+    };
   }
-  const mode = state.reading[level];
-  if (mode.done.includes(challengeIndex) || mode.done.length >= READING_POINTS_PER_SECTION) {
-    return { state, packUnlocked: null, roundComplete: false };
+  const cur = sectionPoints(state, section);
+  if (cur >= pointsPerSection()) {
+    return {
+      state,
+      sectionComplete: false,
+      levelComplete: false,
+      nextSection: null,
+      packUnlocked: null,
+    };
   }
 
-  const newDone = [...mode.done, challengeIndex].sort((a, b) => a - b);
+  const newPts = cur + 1;
   let next: ProgressState = {
     ...state,
-    reading: {
-      ...state.reading,
-      [level]: { done: newDone },
+    readingPath: {
+      ...state.readingPath,
+      sectionPoints: { ...state.readingPath.sectionPoints, [section]: newPts },
     },
   };
 
+  const sectionComplete = newPts >= pointsPerSection();
+  let levelComplete = false;
   let packUnlocked: string | null = null;
-  let roundComplete = false;
+  let nextSection: ReadingSectionId | null = sectionComplete
+    ? nextSectionAfter(next, section)
+    : null;
 
-  if (totalReadingPoints(next) >= READING_POINTS_TO_PASS) {
-    const packId = READING_PACK_ORDER[next.readingRound];
+  if (sectionComplete && isLevelComplete(next)) {
+    levelComplete = true;
+    const completedLevel = next.readingPath.pathLevel;
+    const packId = READING_BOOK_BY_PATH_LEVEL[completedLevel];
     if (packId) {
       const pack = packById(packId);
       const already = pack?.images.every((i) => next.unlockedImages.includes(i.id));
@@ -178,15 +226,38 @@ export function completeReadingChallenge(
         packUnlocked = packId;
       }
     }
-    roundComplete = true;
     next = {
       ...next,
-      readingRound: Math.min(READING_PACK_ORDER.length, next.readingRound + 1),
-      reading: emptyReading(),
+      readingPath: {
+        pathLevel: completedLevel + 1,
+        levelsCompleted: next.readingPath.levelsCompleted + 1,
+        sectionPoints: {},
+      },
     };
+    nextSection = null;
   }
 
-  return { state: next, packUnlocked, roundComplete };
+  return { state: next, sectionComplete, levelComplete, nextSection, packUnlocked };
+}
+
+/** @deprecated */
+export function completeReadingChallenge(
+  state: ProgressState,
+  level: ReadingSectionId,
+  _challengeIndex: number,
+): {
+  state: ProgressState;
+  packUnlocked: string | null;
+  nivelCompleto: boolean;
+  nextLevel: ReadingSectionId | null;
+} {
+  const r = registerReadingCorrect(state, level);
+  return {
+    state: r.state,
+    packUnlocked: r.packUnlocked,
+    nivelCompleto: r.sectionComplete,
+    nextLevel: r.nextSection,
+  };
 }
 
 export type MathAnswerResult = {
@@ -197,7 +268,6 @@ export type MathAnswerResult = {
   streakReset: boolean;
 };
 
-/** Respuesta correcta en matemáticas: +1 racha; al llegar a 5, recompensa libro y sube nivel. */
 export function mathCorrect(state: ProgressState): MathAnswerResult {
   let unlockedPack: string | null = null;
   let superPackUnlocked = false;
@@ -247,7 +317,6 @@ export function mathCorrect(state: ProgressState): MathAnswerResult {
   };
 }
 
-/** Respuesta incorrecta: racha a cero (mismo nivel). */
 export function mathWrong(state: ProgressState): MathAnswerResult {
   return {
     state: { ...state, math: { ...state.math, streak: 0 } },
@@ -276,28 +345,29 @@ export function totalImages(): number {
   return ALL_IMAGE_IDS.length;
 }
 
-/** Progreso hacia el siguiente hito visible en inicio */
 export function nextUnlockSummary(state: ProgressState): {
   title: string;
   detail: string;
   progress: number;
   target: number;
 } {
-  const nextPack = nextReadingPackId(state);
-  if (nextPack && !isPackFullyUnlocked(state, nextPack)) {
+  const pts = totalPointsInLevel(state);
+  const max = maxPointsInLevel();
+  const packId = READING_BOOK_BY_PATH_LEVEL[state.readingPath.pathLevel];
+  if (packId && !isPackFullyUnlocked(state, packId)) {
     return {
-      title: "Siguiente libro (lectura)",
-      detail: `${packById(nextPack)?.name ?? "Libro"} · 5 puntos en cada sección`,
-      progress: totalReadingPoints(state),
-      target: READING_POINTS_TO_PASS,
+      title: `Nivel de lectura ${state.readingPath.pathLevel}`,
+      detail: packById(packId)?.name ?? "Siguiente libro",
+      progress: pts,
+      target: max,
     };
   }
 
   const m = state.math;
   if (m.level <= 5) {
-    const packId = MATH_PACK_BY_LEVEL[m.level];
+    const packIdMath = MATH_PACK_BY_LEVEL[m.level];
     const hasReward = m.rewardedLevels.includes(m.level);
-    const packName = packId ? packById(packId)?.name : "Libro";
+    const packName = packIdMath ? packById(packIdMath)?.name : "Libro";
     return {
       title: hasReward ? `Nivel ${m.level} (sin libro nuevo)` : `Nivel ${m.level} matemáticas`,
       detail: hasReward ? "Completa 5 seguidos para avanzar" : (packName ?? "Nuevo libro"),
@@ -350,4 +420,33 @@ export function subscribeProgress(onChange: () => void): () => void {
 export function commitProgress(state: ProgressState): void {
   saveProgress(state);
   window.dispatchEvent(new Event("akemi-progress"));
+}
+
+export {
+  challengeSlot,
+  currentSection,
+  isSectionComplete,
+  maxPointsInLevel,
+  sectionPoints,
+  sectionsForState,
+  totalPointsInLevel,
+} from "./reading-path";
+
+export const READING_LEVEL_ORDER: ReadingSectionId[] = [
+  "letras",
+  "silabas",
+  "palabras",
+  "frases",
+  "aprende",
+  "lectura",
+];
+
+export function readingLevelNumber(level: ReadingSectionId): number {
+  const list = sectionsForState(loadProgress());
+  return list.indexOf(level) + 1;
+}
+
+export function nextReadingLevel(level: ReadingSectionId): ReadingSectionId | null {
+  const state = loadProgress();
+  return nextSectionAfter(state, level);
 }

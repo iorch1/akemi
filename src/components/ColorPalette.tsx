@@ -6,9 +6,10 @@ type Props = {
   color: string;
   onColor: (hex: string) => void;
   onPick?: () => void;
+  compact?: boolean;
 };
 
-export function ColorPalette({ color, onColor, onPick }: Props) {
+export function ColorPalette({ color, onColor, onPick, compact }: Props) {
   const [hue, setHue] = useState(12);
   const [sat, setSat] = useState(0.85);
   const [showMixer, setShowMixer] = useState(false);
@@ -19,8 +20,8 @@ export function ColorPalette({ color, onColor, onPick }: Props) {
   }
 
   return (
-    <div className="dibujo-colors">
-      <div className="color-row" role="listbox" aria-label="Colores">
+    <div className={`dibujo-colors ${compact ? "dibujo-colors-compact" : ""}`}>
+      <div className={`color-row ${compact ? "color-row-side" : ""}`} role="listbox" aria-label="Colores">
         {PRESET_COLORS.map((c) => (
           <button
             key={c}
@@ -44,7 +45,7 @@ export function ColorPalette({ color, onColor, onPick }: Props) {
         </button>
       </div>
       {showMixer && (
-        <div className="color-mixer panel-soft">
+        <div className={`color-mixer panel-soft ${compact ? "color-mixer-compact" : ""}`}>
           <p className="color-mixer-title">Mezcla tu color</p>
           <label className="mixer-slider">
             Tono
