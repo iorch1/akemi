@@ -1,3 +1,13 @@
+# Akemi — Aprende jugando
+
+App educativa infantil en español (leer, matemáticas, juegos, dibujo).
+
+- **Web:** `npm run dev` → http://127.0.0.1:5173/
+- **Android APK:** ver [docs/ANDROID.md](./docs/ANDROID.md)
+- **Publicación web Cursor:** slug `akemi` — confirmar Publish en el agente del proyecto para obtener la URL pública de escritorio.
+
+---
+
 # React + TypeScript + Vite
 
 This template provides a minimal setup to get React working in Vite with HMR and some Oxlint rules.
