@@ -29,6 +29,8 @@ export type ProfilesStore = {
 
 const STORAGE_KEY = "akemi-profiles-v1";
 const LEGACY_PROGRESS = "akemi-progress-v2";
+const LEGACY_PROGRESS_V3_PREFIX = "akemi-progress-v3-";
+const SCHEMA_MIGRATION_FLAG = "akemi-schema-migrated-v4";
 
 export const AVATAR_CHOICES: { id: AvatarId; emoji: string; label: string }[] = [
   { id: "sol", emoji: "🌞", label: "Sol" },
@@ -63,21 +65,44 @@ export function emptyStore(): ProfilesStore {
 export function loadProfiles(): ProfilesStore {
   try {
     const raw = localStorage.getItem(STORAGE_KEY);
-    if (!raw) return migrateLegacyProgress();
-    const parsed = JSON.parse(raw) as ProfilesStore;
-    if (!parsed.profiles?.length) return migrateLegacyProgress();
-    return {
-      activeId: parsed.activeId ?? parsed.profiles[0]?.id ?? null,
-      profiles: parsed.profiles,
-    };
+    const store = (() => {
+      if (!raw) return migrateLegacyProgress();
+      const parsed = JSON.parse(raw) as ProfilesStore;
+      if (!parsed.profiles?.length) return migrateLegacyProgress();
+      return {
+        activeId: parsed.activeId ?? parsed.profiles[0]?.id ?? null,
+        profiles: parsed.profiles,
+      };
+    })();
+    runProgressSchemaMigration(store);
+    return store;
   } catch {
-    return migrateLegacyProgress();
+    const store = migrateLegacyProgress();
+    runProgressSchemaMigration(store);
+    return store;
   }
 }
 
+/** Una sola vez: borra progreso v2/v3 para que desbloqueos antiguos no sigan vigentes. */
+export function runProgressSchemaMigration(store: ProfilesStore): void {
+  if (localStorage.getItem(SCHEMA_MIGRATION_FLAG)) return;
+  for (const p of store.profiles) {
+    localStorage.removeItem(`${LEGACY_PROGRESS_V3_PREFIX}${p.id}`);
+  }
+  localStorage.removeItem(LEGACY_PROGRESS);
+  const remove: string[] = [];
+  for (let i = 0; i < localStorage.length; i++) {
+    const k = localStorage.key(i);
+    if (k?.startsWith(LEGACY_PROGRESS_V3_PREFIX)) remove.push(k);
+  }
+  for (const k of remove) localStorage.removeItem(k);
+  localStorage.setItem(SCHEMA_MIGRATION_FLAG, "1");
+}
+
 function migrateLegacyProgress(): ProfilesStore {
-  const legacy = localStorage.getItem(LEGACY_PROGRESS);
-  if (!legacy) return emptyStore();
+  const hadLegacy = Boolean(localStorage.getItem(LEGACY_PROGRESS));
+  localStorage.removeItem(LEGACY_PROGRESS);
+  if (!hadLegacy) return emptyStore();
   const profile: UserProfile = {
     id: newId(),
     nombre: "Explorador",
@@ -86,7 +111,6 @@ function migrateLegacyProgress(): ProfilesStore {
     createdAt: Date.now(),
   };
   const store: ProfilesStore = { activeId: profile.id, profiles: [profile] };
-  localStorage.setItem(progressKey(profile.id), legacy);
   saveProfiles(store);
   return store;
 }
@@ -97,7 +121,7 @@ export function saveProfiles(store: ProfilesStore): void {
 }
 
 export function progressKey(profileId: string): string {
-  return `akemi-progress-v3-${profileId}`;
+  return `akemi-progress-v4-${profileId}`;
 }
 
 export function createProfile(nombre: string, edad: number, avatar: AvatarId): UserProfile {

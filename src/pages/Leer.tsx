@@ -3,54 +3,54 @@ import { BackButton } from "../components/BackButton";
 import { useProfileContext } from "../context/ProfileContext";
 import { useProgress } from "../hooks/useProgress";
 import { difficultyForAge, difficultyLabel } from "../lib/difficulty";
-import { packById, READING_PACK_BY_LEVEL } from "../lib/coloring-packs";
+import { packById } from "../lib/coloring-packs";
 import {
-  completeReadingChallenge,
-  nextReadingLevel,
-  readingLevelNumber,
-  type ReadingLevelId,
+  READING_BOOK_BY_PATH_LEVEL,
+  SECTION_LABELS,
+  type ReadingSectionId,
+} from "../lib/reading-path";
+import {
+  challengeSlot,
+  currentSection,
+  isSectionComplete,
+  maxPointsInLevel,
+  registerReadingCorrect,
+  sectionPoints,
+  sectionsForState,
+  totalPointsInLevel,
 } from "../lib/progress";
 import { challengesFor, distractorsFor } from "../lib/reading-challenges";
 import { readingTextForLetter, speak, type SpeakMode } from "../utils/speech";
 import "./Leer.css";
 
-const LEVELS: { id: ReadingLevelId; label: string }[] = [
-  { id: "letras", label: "Letras" },
-  { id: "silabas", label: "Sílabas" },
-  { id: "palabras", label: "Palabras" },
-  { id: "frases", label: "Frases" },
-];
-
 export function Leer() {
   const { profile } = useProfileContext();
   const difficulty = profile ? difficultyForAge(profile.edad) : "facil";
   const [progress, setProgress] = useProgress();
-  const [level, setLevel] = useState<ReadingLevelId>("letras");
-  const [challengeSlot, setChallengeSlot] = useState(0);
+  const [level, setLevel] = useState<ReadingSectionId>(() => currentSection(progress));
   const [feedback, setFeedback] = useState("");
   const [toast, setToast] = useState("");
   const [celebrate, setCelebrate] = useState<string | null>(null);
 
+  const sections = useMemo(() => sectionsForState(progress), [progress]);
+  const pts = sectionPoints(progress, level);
+  const pathLevel = progress.readingPath.pathLevel;
+  const totalPts = totalPointsInLevel(progress);
+  const maxPts = maxPointsInLevel();
+
   const challenges = useMemo(() => challengesFor(level, difficulty), [level, difficulty]);
-  const current = challenges[challengeSlot] ?? challenges[0];
-  const done = progress.reading[level].done;
+  const slot = challengeSlot(progress, level);
+  const current = challenges[slot] ?? challenges[0];
 
   const choices = useMemo(
-    () => distractorsFor(level, current.correct),
-    [level, current.correct, challengeSlot],
+    () => (level === "lectura" ? [] : distractorsFor(level, current.correct)),
+    [level, current.correct, slot],
   );
 
   useEffect(() => {
-    setChallengeSlot(0);
-    setFeedback("");
-    setToast("");
-    setCelebrate(null);
-  }, [level]);
-
-  useEffect(() => {
-    const next = challenges.findIndex((c) => !done.includes(c.index));
-    setChallengeSlot(next >= 0 ? next : 0);
-  }, [challenges, done, level]);
+    const auto = currentSection(progress);
+    setLevel(auto);
+  }, [progress.readingPath.pathLevel, progress.readingPath.sectionPoints, progress]);
 
   function listen() {
     const mode: SpeakMode =
@@ -58,61 +58,67 @@ export function Leer() {
         ? "letter"
         : level === "silabas"
           ? "syllable"
-          : level === "palabras"
-            ? "word"
+          : level === "palabras" || level === "frases" || level === "lectura"
+            ? level === "lectura"
+              ? "phrase"
+              : "word"
             : "phrase";
     const text =
       level === "letras"
         ? readingTextForLetter(current.correct)
-        : level === "palabras" || level === "frases"
+        : level === "lectura"
           ? current.correct
           : current.correct;
-    speak(text, { mode });
+    speak(text, { mode: level === "frases" || level === "lectura" ? "phrase" : mode });
+  }
+
+  function onCorrect() {
+    setFeedback("¡Muy bien!");
+    speak("¡Muy bien!", { mode: "feedback" });
+    const { state, packUnlocked, sectionComplete, levelComplete, nextSection } =
+      registerReadingCorrect(progress, level);
+    setProgress(state);
+    if (packUnlocked) {
+      const name = packById(packUnlocked)?.name ?? "libro";
+      setToast(`¡Nuevo libro desbloqueado: ${name}! 🎨`);
+      speak(`¡Desbloqueaste ${name}!`, { mode: "feedback" });
+    }
+    if (levelComplete) {
+      const msg = `¡Nivel ${pathLevel} completado!`;
+      setCelebrate(msg);
+      speak(msg, { mode: "feedback" });
+      setTimeout(() => setCelebrate(null), 2800);
+    } else if (sectionComplete && nextSection) {
+      setCelebrate(`¡Sección lista! Siguiente: ${SECTION_LABELS[nextSection]}`);
+      speak(`Siguiente sección ${SECTION_LABELS[nextSection]}`, { mode: "feedback" });
+      setTimeout(() => {
+        setCelebrate(null);
+        setLevel(nextSection);
+      }, 1800);
+    }
+    setTimeout(() => setFeedback(""), levelComplete ? 2900 : 700);
   }
 
   function choose(opt: string) {
-    if (done.includes(current.index)) return;
-    if (opt === current.correct) {
-      setFeedback("¡Muy bien!");
-      speak("¡Muy bien!", { mode: "feedback" });
-      const { state, packUnlocked, nivelCompleto, nextLevel } = completeReadingChallenge(
-        progress,
-        level,
-        current.index,
-      );
-      setProgress(state);
-      if (packUnlocked) {
-        const name = packById(packUnlocked)?.name ?? "libro";
-        setToast(`¡Nuevo libro desbloqueado: ${name}! 🎨`);
-        speak(`¡Desbloqueaste ${name}!`, { mode: "feedback" });
-      }
-      if (nivelCompleto) {
-        const n = readingLevelNumber(level);
-        const msg = `¡Nivel ${n} completado!`;
-        setCelebrate(msg);
-        speak(msg, { mode: "feedback" });
-        setTimeout(() => {
-          setCelebrate(null);
-          if (nextLevel) {
-            setLevel(nextLevel);
-          }
-        }, 2200);
-      }
-      setTimeout(() => {
-        setFeedback("");
-        const remaining = challenges.findIndex(
-          (c) => !state.reading[level].done.includes(c.index),
-        );
-        if (remaining >= 0) setChallengeSlot(remaining);
-      }, nivelCompleto ? 2300 : 700);
-    } else {
+    if (isSectionComplete(progress, level)) return;
+    if (opt === current.correct) onCorrect();
+    else {
       setFeedback("Inténtalo otra vez");
       speak("Inténtalo otra vez", { mode: "feedback" });
     }
   }
 
-  const packId = READING_PACK_BY_LEVEL[level];
-  const packName = packId ? packById(packId)?.name : "";
+  function lecturaSelfCheck(readOk: boolean) {
+    if (isSectionComplete(progress, level)) return;
+    if (readOk) onCorrect();
+    else {
+      setFeedback("Tómate tu tiempo y vuelve a intentar");
+      speak("Tómate tu tiempo", { mode: "feedback" });
+    }
+  }
+
+  const bookHint = READING_BOOK_BY_PATH_LEVEL[pathLevel];
+  const bookName = bookHint ? packById(bookHint)?.name : "";
 
   return (
     <main className="screen leer">
@@ -122,61 +128,77 @@ export function Leer() {
       <div className="panel">
         <h1 className="section-title">Aprender a leer</h1>
         <p className="section-sub">
-          3 aciertos desbloquean un libro · 5 aciertos completan el nivel y avanzan · Dificultad:{" "}
-          {difficultyLabel(difficulty)}
+          Nivel de camino <strong>{pathLevel}</strong>: 5 aciertos por sección · {totalPts}/{maxPts} puntos ·
+          Avance automático · Dificultad: {difficultyLabel(difficulty)}
         </p>
 
-        <div className="level-pills" role="tablist" aria-label="Nivel">
-          {LEVELS.map((l) => {
-            const complete = progress.reading[l.id].nivelCompleto;
+        <div className="level-pills" role="tablist" aria-label="Sección">
+          {sections.map((id) => {
+            const complete = isSectionComplete(progress, id);
+            const active = level === id;
             return (
               <button
-                key={l.id}
+                key={id}
                 type="button"
-                className={`level-pill ${level === l.id ? "active" : ""} ${complete ? "level-done" : ""}`}
-                onClick={() => setLevel(l.id)}
+                className={`level-pill ${active ? "active" : ""} ${complete ? "level-done" : ""}`}
+                onClick={() => setLevel(id)}
               >
-                {l.label}
+                {SECTION_LABELS[id]} ({sectionPoints(progress, id)}/5)
                 {complete ? " ✓" : ""}
               </button>
             );
           })}
         </div>
-        <p className="leer-level-badge">Estás en el nivel {readingLevelNumber(level)} de 4</p>
 
-        {packName && (
+        {bookName && (
           <p className="leer-pack-hint">
-            Pack «{packName}»: retos completados{" "}
-            <strong>{Math.min(3, done.length)}</strong>/3 (máx. 5 retos)
+            Al completar este nivel desbloqueas <strong>{bookName}</strong>
           </p>
         )}
 
-        <ul className="leer-challenge-dots" aria-label="Retos del nivel">
-          {challenges.map((c) => (
-            <li
-              key={c.index}
-              className={`dot-slot ${done.includes(c.index) ? "done" : c.index === current.index ? "active" : ""}`}
-            >
-              {done.includes(c.index) ? "✓" : c.index + 1}
+        <ul className="leer-challenge-dots" aria-label="Puntos de la sección">
+          {Array.from({ length: 5 }, (_, i) => (
+            <li key={i} className={`dot-slot ${i < pts ? "done" : i === pts ? "active" : ""}`}>
+              {i < pts ? "✓" : i + 1}
             </li>
           ))}
         </ul>
 
         <div className="leer-stage">
           <p className="leer-prompt">{current.prompt}</p>
-          <button type="button" className="leer-listen btn btn-sky" onClick={listen}>
-            🔊 Escuchar
-          </button>
-          <p className="leer-hint" aria-live="polite">
-            Reto {current.index + 1} de 5 · Elige la respuesta correcta
-          </p>
-          <div className="leer-choices">
-            {choices.map((c) => (
-              <button key={c} type="button" className="leer-choice" onClick={() => choose(c)}>
-                {c}
+          {level === "lectura" ? (
+            <>
+              <p className="leer-reading-passage">{current.correct}</p>
+              <button type="button" className="leer-listen btn btn-sky" onClick={listen}>
+                🔊 Escuchar texto
               </button>
-            ))}
-          </div>
+              <p className="leer-hint">Léelo en voz alta. ¿Lo leíste bien?</p>
+              <div className="leer-choices">
+                <button type="button" className="leer-choice" onClick={() => lecturaSelfCheck(true)}>
+                  ¡Sí, lo leí bien!
+                </button>
+                <button type="button" className="leer-choice leer-choice-muted" onClick={() => lecturaSelfCheck(false)}>
+                  Todavía no
+                </button>
+              </div>
+            </>
+          ) : (
+            <>
+              <button type="button" className="leer-listen btn btn-sky" onClick={listen}>
+                🔊 Escuchar
+              </button>
+              <p className="leer-hint" aria-live="polite">
+                Punto {pts + 1} de 5 en «{SECTION_LABELS[level]}»
+              </p>
+              <div className="leer-choices">
+                {choices.map((c) => (
+                  <button key={c} type="button" className="leer-choice" onClick={() => choose(c)}>
+                    {c}
+                  </button>
+                ))}
+              </div>
+            </>
+          )}
           <p className={`feedback ${feedback === "¡Muy bien!" ? "ok" : feedback ? "bad" : ""}`}>
             {feedback}
           </p>
@@ -187,11 +209,6 @@ export function Leer() {
                 🎉⭐🌈
               </span>
               <p>{celebrate}</p>
-              {nextReadingLevel(level) && (
-                <p className="leer-celebrate-next">
-                  Siguiente: {LEVELS.find((l) => l.id === nextReadingLevel(level))?.label}
-                </p>
-              )}
             </div>
           )}
         </div>

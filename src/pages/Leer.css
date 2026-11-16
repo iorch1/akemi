@@ -1,3 +1,9 @@
+.leer-total-score {
+  text-align: center;
+  font-weight: 700;
+  margin: 0 0 0.85rem;
+}
+
 .leer-stage {
   text-align: center;
 }
@@ -6,6 +12,21 @@
   font-family: var(--font-display);
   font-size: 1.5rem;
   margin: 0 0 0.75rem;
+}
+
+.leer-reading-passage {
+  font-size: clamp(1.15rem, 3.5vw, 1.45rem);
+  line-height: 1.45;
+  margin: 0 0 1rem;
+  padding: 0.75rem 1rem;
+  border-radius: 1rem;
+  background: rgba(255, 255, 255, 0.65);
+  font-weight: 700;
+}
+
+.leer-choice-muted {
+  opacity: 0.85;
+  font-size: 1rem;
 }
 
 .leer-listen {

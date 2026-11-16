@@ -38,6 +38,20 @@ const CHALLENGES: Record<ReadingLevelId, ReadingChallenge[]> = {
     { index: 3, prompt: "Frase de regreso", correct: "Voy a casa" },
     { index: 4, prompt: "Frase de noche", correct: "La luna sale" },
   ],
+  aprende: [
+    { index: 0, prompt: "Une sílabas: «ca» + «sa»", correct: "casa" },
+    { index: 1, prompt: "Une sílabas: «so» + «l»", correct: "sol" },
+    { index: 2, prompt: "¿Qué palabra falta? «El ___ brilla»", correct: "sol" },
+    { index: 3, prompt: "Ordena: «gato» «mi» «duerme»", correct: "Mi gato duerme" },
+    { index: 4, prompt: "Completa: «Me gusta ___»", correct: "leer" },
+  ],
+  lectura: [
+    { index: 0, prompt: "Lee en voz alta", correct: "El pato nada en el lago." },
+    { index: 1, prompt: "Lee en voz alta", correct: "Ana tiene un libro azul." },
+    { index: 2, prompt: "Lee en voz alta", correct: "Papá prepara una sopa rica." },
+    { index: 3, prompt: "Lee en voz alta", correct: "Los pájaros cantan al amanecer." },
+    { index: 4, prompt: "Lee en voz alta", correct: "Hoy hace sol y vamos al parque." },
+  ],
 };
 
 const CHALLENGES_MEDIO: Record<ReadingLevelId, ReadingChallenge[]> = {
@@ -68,6 +82,20 @@ const CHALLENGES_MEDIO: Record<ReadingLevelId, ReadingChallenge[]> = {
     { index: 2, prompt: "Frase con libro", correct: "Leo un libro rojo" },
     { index: 3, prompt: "Frase con amigo", correct: "Mi amigo corre" },
     { index: 4, prompt: "Frase con lluvia", correct: "Llueve en abril" },
+  ],
+  aprende: [
+    { index: 0, prompt: "Une: «ban» + «de» + «ra»", correct: "bandera" },
+    { index: 1, prompt: "¿Falta «luna» o «sol»? «La ___ está alta»", correct: "luna" },
+    { index: 2, prompt: "Construye: «perro» + «el» + «corre»", correct: "El perro corre" },
+    { index: 3, prompt: "Rima: palabra con «mar»", correct: "par" },
+    { index: 4, prompt: "Completa: «María ___ un cuento»", correct: "lee" },
+  ],
+  lectura: [
+    { index: 0, prompt: "Lee en voz alta", correct: "En verano viajamos a la playa con la familia." },
+    { index: 1, prompt: "Lee en voz alta", correct: "El niño construye un castillo con bloques de colores." },
+    { index: 2, prompt: "Lee en voz alta", correct: "Por la mañana desayunamos fruta y pan con miel." },
+    { index: 3, prompt: "Lee en voz alta", correct: "La maestra escribe una poesía en la pizarra grande." },
+    { index: 4, prompt: "Lee en voz alta", correct: "Cuando llueve, leemos cuentos bajo una manta suave." },
   ],
 };
 
@@ -100,12 +128,26 @@ const CHALLENGES_DIFICIL: Record<ReadingLevelId, ReadingChallenge[]> = {
     { index: 3, prompt: "Frase con clima", correct: "Hace frío en invierno" },
     { index: 4, prompt: "Frase con familia", correct: "Mi hermana canta bien" },
   ],
+  aprende: [
+    { index: 0, prompt: "Sinónimo sencillo de «rápido»", correct: "veloz" },
+    { index: 1, prompt: "Antónimo de «grande»", correct: "pequeño" },
+    { index: 2, prompt: "Ordena: «noche» «buenas» «hijas» «mis»", correct: "Buenas noches hijas" },
+    { index: 3, prompt: "Palabra compuesta: «arco» + «iris»", correct: "arcoíris" },
+    { index: 4, prompt: "Completa: «El océano es muy ___»", correct: "profundo" },
+  ],
+  lectura: [
+    { index: 0, prompt: "Lee en voz alta", correct: "Los científicos observan las estrellas con un telescopio especial." },
+    { index: 1, prompt: "Lee en voz alta", correct: "Durante el invierno, algunos animales hibernan en madrigueras." },
+    { index: 2, prompt: "Lee en voz alta", correct: "Mi abuela cocina empanadas y nos cuenta historias antiguas." },
+    { index: 3, prompt: "Lee en voz alta", correct: "Reciclamos papel y plástico para cuidar nuestro planeta." },
+    { index: 4, prompt: "Lee en voz alta", correct: "El equipo ganó el partido después de mucho entrenamiento." },
+  ],
 };
 
 export function challengesFor(level: ReadingLevelId, difficulty: DifficultyId = "facil"): ReadingChallenge[] {
-  if (difficulty === "dificil") return CHALLENGES_DIFICIL[level];
-  if (difficulty === "medio") return CHALLENGES_MEDIO[level];
-  return CHALLENGES[level];
+  const bank =
+    difficulty === "dificil" ? CHALLENGES_DIFICIL : difficulty === "medio" ? CHALLENGES_MEDIO : CHALLENGES;
+  return bank[level] ?? CHALLENGES[level] ?? [];
 }
 
 export function distractorsFor(level: ReadingLevelId, correct: string): string[] {
@@ -116,15 +158,19 @@ export function distractorsFor(level: ReadingLevelId, correct: string): string[]
         ? ["ma", "me", "mi", "mo", "mu", "pa", "pe", "pi", "lo", "la", "sa", "so", "lu"]
         : level === "palabras"
           ? ["sol", "luna", "casa", "gato", "agua", "flor", "rojo", "azul", "pan", "nube"]
-          : [
-              "El sol brilla",
-              "Mi gato duerme",
-              "Me gusta leer",
-              "Voy a casa",
-              "La luna sale",
-              "Un pez nada",
-              "Tengo un amigo",
-            ];
+          : level === "aprende"
+            ? ["casa", "sol", "leer", "luna", "gato", "veloz", "pequeño", "par", "lee"]
+            : level === "lectura"
+              ? [correct]
+              : [
+                  "El sol brilla",
+                  "Mi gato duerme",
+                  "Me gusta leer",
+                  "Voy a casa",
+                  "La luna sale",
+                  "Un pez nada",
+                  "Tengo un amigo",
+                ];
   const opts = new Set<string>([correct]);
   while (opts.size < 4 && opts.size < pool.length) {
     const pick = pool[Math.floor(Math.random() * pool.length)];

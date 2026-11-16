@@ -1,3 +1,89 @@
+.dibujo-title-plain {
+  font-family: var(--font-display);
+  font-size: clamp(1.75rem, 5vw, 2.4rem);
+  margin: 0 0 0.25rem;
+  color: var(--ink);
+  line-height: 1.1;
+}
+
+.dibujo-sub-plain {
+  margin: 0 0 0.85rem;
+  color: rgba(11, 58, 74, 0.75);
+}
+
+.dibujo-mode-pills {
+  margin-bottom: 0.75rem;
+}
+
+.dibujo-workspace {
+  display: grid;
+  gap: 0.65rem;
+  grid-template-columns: minmax(7.5rem, 9.5rem) 1fr minmax(7.5rem, 10.5rem);
+  align-items: start;
+}
+
+@media (max-width: 720px) {
+  .dibujo-workspace {
+    grid-template-columns: 1fr;
+  }
+
+  .dibujo-palette-side {
+    order: 3;
+  }
+
+  .dibujo-canvas-area {
+    order: 2;
+  }
+
+  .dibujo-sidebar {
+    order: 1;
+  }
+}
+
+.dibujo-sidebar,
+.dibujo-palette-side {
+  padding: 0.65rem 0.55rem;
+}
+
+.dibujo-side-title {
+  margin: 0 0 0.35rem;
+  font-weight: 800;
+  font-size: 0.85rem;
+}
+
+.dibujo-side-scroll {
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+  max-height: 9rem;
+  overflow-y: auto;
+  margin-bottom: 0.55rem;
+}
+
+.dibujo-pages {
+  max-height: 12rem;
+}
+
+.dibujo-side-item {
+  text-align: left;
+  border: 2px solid transparent;
+  border-radius: 0.65rem;
+  background: rgba(255, 255, 255, 0.8);
+  padding: 0.35rem 0.45rem;
+  font-size: 0.78rem;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.dibujo-side-item.active {
+  border-color: var(--coral);
+  box-shadow: 0 0 0 1px rgba(255, 107, 107, 0.25);
+}
+
+.dibujo-canvas-area {
+  min-width: 0;
+}
+
 .dibujo-template-scroll {
   flex-wrap: wrap;
   max-height: 7rem;
@@ -10,10 +96,9 @@
 
 .dibujo-locked-msg {
   text-align: center;
-  padding: 1.25rem;
-  border-radius: 1rem;
-  background: rgba(255, 255, 255, 0.7);
+  padding: 0.85rem;
   font-weight: 700;
+  font-size: 0.9rem;
 }
 
 .color-row {
@@ -22,6 +107,18 @@
   gap: 0.45rem;
   margin-bottom: 1rem;
   justify-content: center;
+}
+
+.color-row-side {
+  justify-content: flex-start;
+  gap: 0.35rem;
+  margin-bottom: 0.5rem;
+}
+
+.dibujo-colors-compact .swatch {
+  width: 1.65rem;
+  height: 1.65rem;
+  border-width: 2px;
 }
 
 .dibujo-colors {
@@ -36,13 +133,46 @@
   margin-bottom: 0.85rem;
 }
 
+.dibujo-toolbar-compact {
+  flex-direction: column;
+  margin-bottom: 0;
+  gap: 0.35rem;
+}
+
 .dibujo-toolbar .tool-active {
   box-shadow: inset 0 0 0 2px var(--leaf);
+}
+
+.btn-mini {
+  min-height: 2.35rem !important;
+  font-size: 0.88rem !important;
+  padding: 0.4rem 0.55rem !important;
 }
 
 .color-mixer {
   margin-top: 0.65rem;
   padding: 0.75rem;
+}
+
+.color-mixer-compact {
+  padding: 0.45rem 0.5rem;
+  margin-top: 0.4rem;
+  font-size: 0.85rem;
+}
+
+.color-mixer-compact .mixer-preview {
+  width: 1.85rem;
+  height: 1.85rem;
+}
+
+.color-mixer-compact .mixer-slider {
+  margin-bottom: 0.3rem;
+  font-size: 0.82rem;
+}
+
+.color-mixer-compact .color-mixer-title {
+  font-size: 0.88rem;
+  margin-bottom: 0.35rem;
 }
 
 .color-mixer-title {
@@ -82,6 +212,10 @@
   display: flex;
   align-items: center;
   justify-content: center;
+}
+
+.dibujo-colors-compact .swatch-mixer {
+  font-size: 0.85rem;
 }
 
 .dibujo-brush-title {
@@ -135,9 +269,13 @@
   justify-content: center;
 }
 
+.canvas-frame-large {
+  width: 100%;
+}
+
 .draw-canvas {
   width: min(100%, 320px);
-  aspect-ratio: 1;
+  aspect-ratio: 400 / 520;
   border-radius: 1rem;
   box-shadow: var(--shadow);
   touch-action: none;
@@ -145,10 +283,17 @@
   cursor: pointer;
 }
 
+.draw-canvas-large {
+  width: min(100%, 560px);
+  max-height: min(78dvh, 720px);
+  aspect-ratio: 520 / 680;
+}
+
 .dibujo-hint {
   text-align: center;
-  margin: 0 0 0.75rem;
+  margin: 0 0 0.5rem;
   opacity: 0.75;
+  font-size: 0.92rem;
 }
 
 .brush-row {
@@ -175,12 +320,17 @@
   box-shadow: var(--shadow);
   background: #fff;
   -webkit-overflow-scrolling: touch;
+  width: 100%;
+}
+
+.free-scroll-large {
+  max-height: min(78dvh, 680px);
 }
 
 .free-canvas {
   display: block;
-  width: 1200px;
-  height: 900px;
+  width: 1400px;
+  height: 1000px;
   touch-action: none;
   cursor: crosshair;
 }
