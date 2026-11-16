@@ -11,11 +11,31 @@ import {
   type ProgramBlock,
 } from "../lib/crear/blocks";
 import {
+  buildStarterBlocks,
+  CREAR_CURRICULUM,
+  levelById,
+  type CrearLevel,
+} from "../lib/crear/curriculum";
+import {
+  isLevelUnlocked,
+  loadCrearLevelProgress,
+  markLevelComplete,
+  setActiveCrearLevel,
+  subscribeCrearLevels,
+  type CrearLevelProgress,
+} from "../lib/crear/level-progress";
+import {
   DEFAULT_SPRITE,
   runProgram,
   STAGE_SIZE,
+  type GoalRunContext,
   type SpriteState,
 } from "../lib/crear/runtime";
+import {
+  drawAkemiSprite,
+  drawStageGoals,
+  roundRect,
+} from "../lib/crear/stage-draw";
 import {
   deleteCreation,
   loadCreations,
@@ -47,12 +67,32 @@ export function Crear() {
   const [tutorialStep, setTutorialStep] = useState(0);
   const [saves, setSaves] = useState<SavedCreation[]>([]);
   const [sayFlash, setSayFlash] = useState<string | null>(null);
+  const [levelProgress, setLevelProgress] = useState<CrearLevelProgress>(() =>
+    loadCrearLevelProgress(profileId),
+  );
+  const [collectedGoals, setCollectedGoals] = useState<Set<string>>(() => new Set());
+  const [celebrate, setCelebrate] = useState<{ open: boolean; level: CrearLevel | null }>({
+    open: false,
+    level: null,
+  });
   const runAbort = useRef<AbortController | null>(null);
   const stageRef = useRef<HTMLCanvasElement>(null);
+  const collectedRef = useRef<Set<string>>(new Set());
+  const lastAppliedLevelRef = useRef<string | null>(null);
+  const activeLevel =
+    levelById(levelProgress.activeLevelId) ?? CREAR_CURRICULUM[0];
 
   useEffect(() => {
     if (!profileId) return;
     setSaves(loadCreations(profileId));
+    setLevelProgress(loadCrearLevelProgress(profileId));
+    lastAppliedLevelRef.current = null;
+  }, [profileId]);
+
+  useEffect(() => {
+    return subscribeCrearLevels(() => {
+      if (profileId) setLevelProgress(loadCrearLevelProgress(profileId));
+    });
   }, [profileId]);
 
   useEffect(() => {
@@ -63,74 +103,107 @@ export function Crear() {
     }
   }, []);
 
-  const drawStage = useCallback((st: SpriteState) => {
-    const canvas = stageRef.current;
-    if (!canvas) return;
-    const ctx = canvas.getContext("2d");
-    if (!ctx) return;
-    const { width, height } = canvas;
+  const drawStage = useCallback(
+    (st: SpriteState, collected: Set<string>) => {
+      const canvas = stageRef.current;
+      if (!canvas) return;
+      const ctx = canvas.getContext("2d");
+      if (!ctx) return;
+      const { width, height } = canvas;
 
-    ctx.clearRect(0, 0, width, height);
-    const grd = ctx.createLinearGradient(0, 0, 0, height);
-    grd.addColorStop(0, "#87ceeb");
-    grd.addColorStop(0.55, "#b8e986");
-    grd.addColorStop(1, "#5cb85c");
-    ctx.fillStyle = grd;
-    ctx.fillRect(0, 0, width, height);
+      ctx.clearRect(0, 0, width, height);
+      const grd = ctx.createLinearGradient(0, 0, 0, height);
+      grd.addColorStop(0, "#87ceeb");
+      grd.addColorStop(0.55, "#b8e986");
+      grd.addColorStop(1, "#5cb85c");
+      ctx.fillStyle = grd;
+      ctx.fillRect(0, 0, width, height);
 
-    ctx.strokeStyle = "rgba(255,255,255,0.35)";
-    ctx.lineWidth = 1;
-    for (let x = 0; x < width; x += 40) {
+      ctx.strokeStyle = "rgba(255,255,255,0.35)";
+      ctx.lineWidth = 1;
+      for (let x = 0; x < width; x += 40) {
+        ctx.beginPath();
+        ctx.moveTo(x, 0);
+        ctx.lineTo(x, height);
+        ctx.stroke();
+      }
+      for (let y = 0; y < height; y += 40) {
+        ctx.beginPath();
+        ctx.moveTo(0, y);
+        ctx.lineTo(width, y);
+        ctx.stroke();
+      }
+
+      ctx.fillStyle = "#ffd166";
       ctx.beginPath();
-      ctx.moveTo(x, 0);
-      ctx.lineTo(x, height);
-      ctx.stroke();
-    }
-    for (let y = 0; y < height; y += 40) {
-      ctx.beginPath();
-      ctx.moveTo(0, y);
-      ctx.lineTo(width, y);
-      ctx.stroke();
-    }
-
-    ctx.fillStyle = "#ffd166";
-    ctx.beginPath();
-    ctx.arc(width - 42, 42, 22, 0, Math.PI * 2);
-    ctx.fill();
-
-    ctx.font = "40px system-ui";
-    ctx.textAlign = "center";
-    ctx.textBaseline = "middle";
-    ctx.fillText("⭐", width * 0.78, height * 0.62);
-
-    drawAkemiSprite(ctx, st);
-
-    if (st.sayBubble) {
-      const bx = st.x;
-      const by = st.y - 52;
-      ctx.font = "700 14px Nunito, sans-serif";
-      const tw = ctx.measureText(st.sayBubble).width;
-      const pad = 10;
-      const w = tw + pad * 2;
-      const h = 28;
-      ctx.fillStyle = "rgba(255,255,255,0.95)";
-      ctx.strokeStyle = "rgba(11,58,74,0.2)";
-      roundRect(ctx, bx - w / 2, by - h / 2, w, h, 10);
+      ctx.arc(width - 42, 42, 22, 0, Math.PI * 2);
       ctx.fill();
-      ctx.stroke();
-      ctx.fillStyle = varInk();
-      ctx.fillText(st.sayBubble, bx, by + 1);
-    }
-  }, []);
+
+      drawStageGoals(ctx, activeLevel.goals, collected);
+      drawAkemiSprite(ctx, st);
+
+      if (st.sayBubble) {
+        const bx = st.x;
+        const by = st.y - 52;
+        ctx.font = "700 14px Nunito, sans-serif";
+        const tw = ctx.measureText(st.sayBubble).width;
+        const pad = 10;
+        const w = tw + pad * 2;
+        const h = 28;
+        ctx.fillStyle = "rgba(255,255,255,0.95)";
+        ctx.strokeStyle = "rgba(11,58,74,0.2)";
+        roundRect(ctx, bx - w / 2, by - h / 2, w, h, 10);
+        ctx.fill();
+        ctx.stroke();
+        ctx.fillStyle = varInk();
+        ctx.fillText(st.sayBubble, bx, by + 1);
+      }
+    },
+    [activeLevel.goals],
+  );
 
   useEffect(() => {
-    drawStage(sprite);
-  }, [sprite, drawStage]);
+    drawStage(sprite, collectedGoals);
+  }, [sprite, collectedGoals, drawStage]);
+
+  function spriteForLevel(level: CrearLevel): SpriteState {
+    return {
+      ...DEFAULT_SPRITE,
+      x: level.start.x,
+      y: level.start.y,
+      heading: level.start.heading,
+      sayBubble: null,
+    };
+  }
+
+  function resetCollected() {
+    collectedRef.current = new Set();
+    setCollectedGoals(new Set());
+  }
+
+  function resetSpriteForLevel() {
+    const st = spriteForLevel(activeLevel);
+    setSprite(st);
+    drawStage(st, collectedRef.current);
+  }
 
   function resetSprite() {
-    setSprite({ ...DEFAULT_SPRITE });
-    drawStage({ ...DEFAULT_SPRITE });
+    resetSpriteForLevel();
   }
+
+  function applyLevel(level: CrearLevel) {
+    resetCollected();
+    setBlocks(cloneBlocks(buildStarterBlocks(level)));
+    const st = spriteForLevel(level);
+    setSprite(st);
+    drawStage(st, new Set());
+  }
+
+  useEffect(() => {
+    if (lastAppliedLevelRef.current === levelProgress.activeLevelId) return;
+    lastAppliedLevelRef.current = levelProgress.activeLevelId;
+    applyLevel(activeLevel);
+  }, [levelProgress.activeLevelId, activeLevel]);
 
   function addBlock(kind: BlockKind) {
     if (kind === "event_start") return;
@@ -161,15 +234,44 @@ export function Crear() {
     });
   }
 
+  function pickLevel(level: CrearLevel) {
+    if (running || !profileId) return;
+    if (!isLevelUnlocked(levelProgress, level.id)) return;
+    const next = setActiveCrearLevel(profileId, level.id);
+    setLevelProgress(next);
+  }
+
+  function handleWin() {
+    if (!profileId) return;
+    runAbort.current?.abort();
+    const next = markLevelComplete(profileId, activeLevel.id);
+    setLevelProgress(next);
+    setCelebrate({ open: true, level: activeLevel });
+    setRunning(false);
+    setSayFlash(null);
+  }
+
   async function play() {
     if (running) return;
     runAbort.current?.abort();
     const ac = new AbortController();
     runAbort.current = ac;
     setRunning(true);
-    resetSprite();
-    let current = { ...DEFAULT_SPRITE };
+    resetCollected();
+    const initial = spriteForLevel(activeLevel);
+    let current = initial;
     setSprite(current);
+    drawStage(current, new Set());
+
+    const goalCtx: GoalRunContext = {
+      goals: activeLevel.goals,
+      collected: collectedRef.current,
+      onCollect: () => {
+        setCollectedGoals(new Set(collectedRef.current));
+        drawStage(current, collectedRef.current);
+      },
+      onWin: handleWin,
+    };
 
     await runProgram(
       blocks,
@@ -179,6 +281,7 @@ export function Crear() {
         onTick: (st) => {
           current = st;
           setSprite(st);
+          drawStage(st, collectedRef.current);
         },
         onSay: (t) => setSayFlash(t),
         onDone: () => {
@@ -187,6 +290,7 @@ export function Crear() {
         },
       },
       ac.signal,
+      goalCtx,
     );
   }
 
@@ -232,7 +336,7 @@ export function Crear() {
   const tutorialSteps = [
     "Bienvenido a Crear: ¡tu Hora del Código!",
     "Arrastra bloques al espacio de trabajo o tócalos para añadirlos.",
-    "Usa Avanzar y Girar para mover a Aki, la estrella exploradora.",
+    "Cada nivel tiene una misión: llega a la estrella o recoge gemas.",
     "Pulsa ▶ Reproducir para ver la animación en el escenario.",
     "Guarda tu proyecto cuando te guste. ¡A programar!",
   ];
@@ -245,7 +349,7 @@ export function Crear() {
       <div className="panel crear-panel">
         <header className="crear-header">
           <h1 className="section-title">Crear</h1>
-          <p className="section-sub">Programa bloques y mueve a Aki por el escenario</p>
+          <p className="section-sub">Currículo de programación con 15 niveles y retos claros</p>
           <button type="button" className="btn btn-ghost crear-tutorial-btn" onClick={() => setShowTutorial(true)}>
             Guía Hora del Código
           </button>
@@ -256,7 +360,9 @@ export function Crear() {
             <h2 className="crear-aside-title">Bloques</h2>
             <p className="crear-hint">Toca un bloque para añadirlo</p>
             <ul className="crear-palette-list">
-              {BLOCK_DEFS.filter((d) => d.kind !== "event_start").map((def) => (
+              {BLOCK_DEFS.filter(
+                (d) => d.kind !== "event_start" && activeLevel.allowedBlocks.includes(d.kind),
+              ).map((def) => (
                 <li key={def.kind}>
                   <button
                     type="button"
@@ -274,6 +380,32 @@ export function Crear() {
           </aside>
 
           <section className="crear-workspace-wrap">
+            <div className="crear-level-header panel-soft">
+              <h2 className="crear-level-title">{activeLevel.title}</h2>
+              <p className="crear-level-mission">{activeLevel.mission}</p>
+              <p className="crear-hint crear-level-hint">{activeLevel.hint}</p>
+            </div>
+            <div className="crear-level-pills" role="tablist" aria-label="Niveles del currículo">
+              {CREAR_CURRICULUM.map((lvl) => {
+                const unlocked = isLevelUnlocked(levelProgress, lvl.id);
+                const done = levelProgress.completedLevelIds.includes(lvl.id);
+                const active = lvl.id === levelProgress.activeLevelId;
+                return (
+                  <button
+                    key={lvl.id}
+                    type="button"
+                    role="tab"
+                    aria-selected={active}
+                    disabled={running || !unlocked}
+                    className={`crear-level-pill ${active ? "active" : ""} ${done ? "done" : ""}`}
+                    onClick={() => pickLevel(lvl)}
+                    title={unlocked ? lvl.title : "Completa el nivel anterior"}
+                  >
+                    {unlocked ? (done ? "✓" : lvl.id.replace("l", "")) : "🔒"}
+                  </button>
+                );
+              })}
+            </div>
             <div className="crear-workspace-toolbar">
               <button type="button" className="btn btn-leaf" disabled={running} onClick={() => void play()}>
                 ▶ Reproducir
@@ -362,6 +494,9 @@ export function Crear() {
               })}
             </ol>
 
+            <p className="crear-progress-note">
+              Completados: {levelProgress.completedLevelIds.length}/{CREAR_CURRICULUM.length}
+            </p>
             {saves.length > 0 && (
               <div className="crear-saves">
                 <h3 className="crear-saves-title">Proyectos guardados</h3>
@@ -401,10 +536,32 @@ export function Crear() {
               className="crear-stage"
             />
             {sayFlash && <p className="crear-say-flash">🔊 {sayFlash}</p>}
-            <p className="crear-hint">Meta: acércate a la estrella ⭐</p>
+            <p className="crear-hint crear-goal-hint">
+              {activeLevel.goals.some((g) => g.kind === "collect")
+                ? "Recolecta todas las gemas moradas"
+                : "Llega a la estrella dorada"}
+            </p>
           </aside>
         </div>
       </div>
+
+      {celebrate.open && celebrate.level && (
+        <div className="crear-tutorial-backdrop crear-celebrate-backdrop" role="dialog" aria-modal="true">
+          <div className="crear-celebrate panel">
+            <h2 className="crear-tutorial-title">¡Lo lograste!</h2>
+            <p className="crear-tutorial-text">
+              Completaste <strong>{celebrate.level.title}</strong>. ¡Sigue con el siguiente reto!
+            </p>
+            <button
+              type="button"
+              className="btn btn-leaf"
+              onClick={() => setCelebrate({ open: false, level: null })}
+            >
+              ¡Genial!
+            </button>
+          </div>
+        </div>
+      )}
 
       {showTutorial && (
         <div className="crear-tutorial-backdrop" role="dialog" aria-modal="true" aria-labelledby="tut-title">
@@ -512,71 +669,6 @@ function RepeatBody({
       </ul>
     </div>
   );
-}
-
-/** Personaje original: estrella morada “Aki”. */
-function drawAkemiSprite(ctx: CanvasRenderingContext2D, st: SpriteState) {
-  ctx.save();
-  ctx.translate(st.x, st.y);
-  ctx.rotate((st.heading * Math.PI) / 180);
-
-  ctx.fillStyle = "#7b4dff";
-  ctx.strokeStyle = "#4527a8";
-  ctx.lineWidth = 2;
-  starPath(ctx, 0, 0, 26, 5);
-  ctx.fill();
-  ctx.stroke();
-
-  ctx.fillStyle = "#fff";
-  ctx.beginPath();
-  ctx.arc(6, -4, 4, 0, Math.PI * 2);
-  ctx.arc(14, -4, 4, 0, Math.PI * 2);
-  ctx.fill();
-  ctx.fillStyle = "#2d1b69";
-  ctx.beginPath();
-  ctx.arc(7, -4, 2, 0, Math.PI * 2);
-  ctx.arc(15, -4, 2, 0, Math.PI * 2);
-  ctx.fill();
-
-  ctx.beginPath();
-  ctx.moveTo(-18, 12);
-  ctx.lineTo(-8, 18);
-  ctx.lineTo(-4, 8);
-  ctx.fillStyle = "#9d7aff";
-  ctx.fill();
-
-  ctx.restore();
-}
-
-function starPath(ctx: CanvasRenderingContext2D, cx: number, cy: number, outer: number, points: number) {
-  const inner = outer * 0.45;
-  ctx.beginPath();
-  for (let i = 0; i < points * 2; i++) {
-    const r = i % 2 === 0 ? outer : inner;
-    const a = (Math.PI / points) * i - Math.PI / 2;
-    const x = cx + Math.cos(a) * r;
-    const y = cy + Math.sin(a) * r;
-    if (i === 0) ctx.moveTo(x, y);
-    else ctx.lineTo(x, y);
-  }
-  ctx.closePath();
-}
-
-function roundRect(
-  ctx: CanvasRenderingContext2D,
-  x: number,
-  y: number,
-  w: number,
-  h: number,
-  r: number,
-) {
-  ctx.beginPath();
-  ctx.moveTo(x + r, y);
-  ctx.arcTo(x + w, y, x + w, y + h, r);
-  ctx.arcTo(x + w, y + h, x, y + h, r);
-  ctx.arcTo(x, y + h, x, y, r);
-  ctx.arcTo(x, y, x + w, y, r);
-  ctx.closePath();
 }
 
 function varInk() {

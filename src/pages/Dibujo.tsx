@@ -1,7 +1,8 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { BackButton } from "../components/BackButton";
 import { BrushToolMenus } from "../components/BrushToolMenus";
-import { ColorPalette } from "../components/ColorPalette";
+import { ColorMixer, ColorSwatches, useColorMixerState } from "../components/ColorPalette";
+import { hsvToHex } from "../lib/drawing-tools";
 import { useProgress } from "../hooks/useProgress";
 import { BRUSH_PRESETS, type BrushPreset } from "../lib/drawing-tools";
 import { COLORING_PACKS, packForImage } from "../lib/coloring-packs";
@@ -111,6 +112,7 @@ export function Dibujo() {
   const [packId, setPackId] = useState(unlockedByPack[0]?.pack.id ?? "");
   const [templateId, setTemplateId] = useState(unlockedByPack[0]?.pages[0]?.id ?? "");
   const [color, setColor] = useState("#ff6b6b");
+  const mixer = useColorMixerState();
   const [brushPreset, setBrushPreset] = useState<BrushPreset>(BRUSH_PRESETS[4]);
   const [erasing, setErasing] = useState(false);
   const colorCanvasRef = useRef<HTMLCanvasElement>(null);
@@ -419,9 +421,28 @@ export function Dibujo() {
       </>
     );
 
+  function applyMixerColor() {
+    setColor(hsvToHex(mixer.hue, mixer.sat, 1));
+    setErasing(false);
+  }
+
+  const mixerBar =
+    mixer.showMixer && (
+      <ColorMixer
+        hue={mixer.hue}
+        sat={mixer.sat}
+        onHue={mixer.setHue}
+        onSat={mixer.setSat}
+        onApply={applyMixerColor}
+        compact
+        layout="bar"
+      />
+    );
+
   const canvasArea =
     mode === "colorear" && unlockedByPack.length > 0 ? (
       <>
+        {mixerBar}
         <p className="dibujo-hint">
           {erasing ? "Toca una zona para borrar (blanco)" : "Toca una zona para rellenarla de color"}
         </p>
@@ -436,7 +457,9 @@ export function Dibujo() {
         </div>
       </>
     ) : mode === "libre" ? (
-      <div className="free-scroll free-scroll-large">
+      <>
+        {mixerBar}
+        <div className="free-scroll free-scroll-large">
         <canvas
           ref={freeCanvasRef}
           width={1400}
@@ -447,7 +470,8 @@ export function Dibujo() {
           onPointerUp={endFree}
           onPointerCancel={endFree}
         />
-      </div>
+        </div>
+      </>
     ) : null;
 
   return (
@@ -480,12 +504,16 @@ export function Dibujo() {
 
       <div className="dibujo-workspace">
         <aside className="dibujo-palette-side panel-soft" aria-label="Colores y herramientas">
-          <ColorPalette
-            color={color}
-            onColor={setColor}
-            onPick={() => setErasing(false)}
-            compact
-          />
+          <div className="dibujo-colors dibujo-colors-compact">
+            <ColorSwatches
+              color={color}
+              onColor={setColor}
+              onPick={() => setErasing(false)}
+              compact
+              showMixer={mixer.showMixer}
+              onToggleMixer={() => mixer.setShowMixer((v) => !v)}
+            />
+          </div>
           {mode === "libre" && (
             <>
               <p className="dibujo-side-title">Herramientas</p>
